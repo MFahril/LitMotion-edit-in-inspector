@@ -1,0 +1,166 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2ab54108cf62fcc4ca23930efa6a7602, type: 3}
+  m_Name: SlideInTop
+  m_EditorClassIdentifier: LitMotionTweenEditor::LitMotion.TweenEditor.TweenAnimationAsset
+  animation:
+    Id: Show
+    Steps:
+    - Type: 0
+      Label: Slide
+      Enabled: 1
+      StartTime: 0
+      Duration: 0.35
+      Ease: 8
+      CustomCurve:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0
+          value: 0
+          inSlope: 0
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 1
+          value: 1
+          inSlope: 0
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      Delay: 0
+      DelayType: 0
+      Loops: 1
+      LoopType: 0
+      Target: {fileID: 0}
+      PropertyName: 
+      From: {x: 0, y: 160, z: 0, w: 0}
+      To: {x: 0, y: 0, z: 0, w: 0}
+      FromColor: {r: 1, g: 1, b: 1, a: 1}
+      ToColor: {r: 1, g: 1, b: 1, a: 1}
+      FromCurrent: 1
+      Relative: 0
+      FromOffset: 1
+      Space: 0
+      Axis: 7
+      Channel: 0
+      AnchorTarget: 0
+      MaterialPropertyKind: 0
+      CameraProperty: 0
+      TMPCharChannel: 0
+      UniformScale: 0
+      Frequency: 10
+      DampingRatio: 1
+      RandomSeed: 0
+      JumpCount: 1
+      JumpPower: 1
+      TextFormat: '{0}'
+      TextUnit: 0
+      ScrambleMode: 0
+      TargetText: 
+      RichText: 1
+      ScrambleChars: 
+      CharacterIndex: 0
+      Stagger: 0.03
+      OnCallback:
+        m_PersistentCalls:
+          m_Calls: []
+      OnProgress:
+        m_PersistentCalls:
+          m_Calls: []
+    - Type: 40
+      Label: Fade
+      Enabled: 1
+      StartTime: 0
+      Duration: 0.25
+      Ease: 5
+      CustomCurve:
+        serializedVersion: 2
+        m_Curve:
+        - serializedVersion: 3
+          time: 0
+          value: 0
+          inSlope: 0
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        - serializedVersion: 3
+          time: 1
+          value: 1
+          inSlope: 0
+          outSlope: 0
+          tangentMode: 0
+          weightedMode: 0
+          inWeight: 0
+          outWeight: 0
+        m_PreInfinity: 2
+        m_PostInfinity: 2
+        m_RotationOrder: 4
+      Delay: 0
+      DelayType: 0
+      Loops: 1
+      LoopType: 0
+      Target: {fileID: 0}
+      PropertyName: 
+      From: {x: 0, y: 0, z: 0, w: 0}
+      To: {x: 1, y: 0, z: 0, w: 0}
+      FromColor: {r: 1, g: 1, b: 1, a: 1}
+      ToColor: {r: 1, g: 1, b: 1, a: 1}
+      FromCurrent: 0
+      Relative: 0
+      FromOffset: 0
+      Space: 0
+      Axis: 7
+      Channel: 0
+      AnchorTarget: 0
+      MaterialPropertyKind: 0
+      CameraProperty: 0
+      TMPCharChannel: 0
+      UniformScale: 0
+      Frequency: 10
+      DampingRatio: 1
+      RandomSeed: 0
+      JumpCount: 1
+      JumpPower: 1
+      TextFormat: '{0}'
+      TextUnit: 0
+      ScrambleMode: 0
+      TargetText: 
+      RichText: 1
+      ScrambleChars: 
+      CharacterIndex: 0
+      Stagger: 0.03
+      OnCallback:
+        m_PersistentCalls:
+          m_Calls: []
+      OnProgress:
+        m_PersistentCalls:
+          m_Calls: []
+    Loops: 1
+    LoopType: 0
+    PlaybackSpeed: 1
+    IgnoreTimeScale: 0
+    BlendMode: 0
+    KillBehavior: 0
+    OnComplete:
+      m_PersistentCalls:
+        m_Calls: []
