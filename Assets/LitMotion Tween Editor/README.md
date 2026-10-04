@@ -132,3 +132,33 @@ public sealed class LightIntensityChannel : ITweenExtensionChannel
 
 A complete worked example, with a colour channel and a custom inspector section, is in
 [`Samples/Extensions`](Samples/Extensions).
+
+In a player, channels are found by a one-time reflection scan of the assemblies that reference
+this package, on the first Play of an extension step. Call `TweenExtensionRegistry.Prewarm()`
+from a loading screen to pay for it there instead.
+
+---
+
+## Runtime cost
+
+The editor half of the package is an editor-only assembly and never ships. At runtime a playing
+animation allocates nothing per frame on any channel except a uGUI `Text` counter, which makes
+one string each time the *shown* number changes. A TMP counter allocates nothing.
+
+- **One-step animations run as a single LitMotion motion**, on LitMotion's Burst job. That costs
+  about 1.5× raw LitMotion per frame.
+- **Multi-step animations run as an `LSequence`.** LitMotion updates sequence children one by one
+  on the main thread, which is about 3× the per-frame cost of the same motions run on their own.
+  For a typical UI, a few dozen at once, that is hundredths of a millisecond.
+- **`Play()` costs a few microseconds** and a small allocation per step. *Kill Behavior: Rewind*
+  also captures the values it will restore; the other kill behaviors capture nothing.
+- **A MaterialProperty step gives its target its own material instance** the first time it plays
+  at runtime, the same way `renderer.material` does, so other objects sharing the material are
+  untouched. The instance is destroyed with the object. On a UI Graphic this means the material
+  asset itself is never written.
+- **Inside a multi-step animation, a finished step keeps writing its end value** until the whole
+  animation ends. LitMotion does this, not this package. A short Fade inside a long animation
+  therefore holds the alpha until the end, and other scripts cannot change that property until
+  then.
+
+Numbers, method and the benchmark test are in [ROADMAP.md](ROADMAP.md) under M5.

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using LitMotion.Extensions;
 using Unity.Collections;
@@ -22,6 +23,50 @@ namespace LitMotion.TweenEditor
     /// </remarks>
     public static class TweenStepBuilder
     {
+        // Animation-level settings folded into the step's own motion while BuildAlone runs, so
+        // that a one-step animation needs no sequence. Read by Configure; main thread only, as
+        // with the runner's shared handle buffer.
+        static bool alone;
+        static int aloneLoops;
+        static LoopType aloneLoopType;
+        static Action aloneOnComplete;
+
+        /// <summary>
+        /// Builds a step that stands in for its whole animation: the animation's loops and
+        /// completion callback are applied to the step's own motion.
+        /// </summary>
+        /// <remarks>
+        /// Only valid for a step <see cref="TweenAnimationRunner"/> has checked can run alone,
+        /// which is what guarantees one motion and no clash with the step's own loops.
+        /// </remarks>
+        internal static int BuildAlone(TweenStep step, GameObject fallback, IMotionScheduler scheduler,
+            List<MotionHandle> results, out string error, int loops, LoopType loopType, Action onComplete)
+        {
+            alone = true;
+            aloneLoops = loops;
+            aloneLoopType = loopType;
+            aloneOnComplete = onComplete;
+
+            try
+            {
+                return Build(step, fallback, scheduler, results, out error);
+            }
+            finally
+            {
+                alone = false;
+                aloneOnComplete = null;
+            }
+        }
+
+        /// <summary>
+        /// The loop count a step's motion is actually built with. Infinite step loops are
+        /// clamped to one pass, because a sequence cannot schedule a child that never ends.
+        /// </summary>
+        internal static int EffectiveLoops(TweenStep step)
+        {
+            return step.Loops < 0 ? 1 : step.Loops;
+        }
+
         /// <summary>
         /// Builds the motions for one step and appends them to <paramref name="results"/>.
         /// </summary>
@@ -69,35 +114,41 @@ namespace LitMotion.TweenEditor
                 return BuildTmpCharacter(step, target, scheduler, results, out error);
             }
 
-            if (step.Type == TweenType.MaterialProperty
-                && !TryValidateMaterial(step, target, out error))
+            // Built once and handed down: it costs a shader property lookup and a registry
+            // lookup, and every stage below needs it.
+            var context = TweenChannelContext.For(step);
+
+            if (step.Type == TweenType.MaterialProperty)
             {
-                return 0;
+                if (!TryValidateMaterial(step, target, context, out var material, out error)) return 0;
+
+                // Resolved once here rather than on every frame's write. The writer, the
+                // endpoint read and the snapshot all address the material from now on.
+                target = material;
             }
 
             // An Anchors step set to Both drives two independent properties.
             if (step.Type == TweenType.Anchors && step.AnchorTarget == TweenAnchorTarget.Both)
             {
-                var written = BuildChannel(step, target, TweenChannelKey.AnchorMin, scheduler, results, out error);
-                written += BuildChannel(step, target, TweenChannelKey.AnchorMax, scheduler, results, out var maxError);
+                var written = BuildChannel(step, target, TweenChannelKey.AnchorMin, context, scheduler, results, out error);
+                written += BuildChannel(step, target, TweenChannelKey.AnchorMax, context, scheduler, results, out var maxError);
                 error ??= maxError;
                 return written;
             }
 
-            return BuildChannel(step, target, key, scheduler, results, out error);
+            return BuildChannel(step, target, key, context, scheduler, results, out error);
         }
 
-        static int BuildChannel(TweenStep step, Object target, TweenChannelKey key,
+        static int BuildChannel(TweenStep step, Object target, TweenChannelKey key, in TweenChannelContext context,
             IMotionScheduler scheduler, List<MotionHandle> results, out string error)
         {
             error = null;
 
-            var context = TweenChannelContext.For(step);
-            var axis = TweenChannelAccessor.GetEffectiveAxis(step, key);
+            var axis = TweenChannelAccessor.GetEffectiveAxis(step, key, context);
             var kind = TweenChannelAccessor.GetValueKind(key, context);
             var isColor = TweenChannelAccessor.IsColorChannel(key, context);
 
-            if (!ResolveEndpoints(step, target, key, isColor, out var from, out var to, out error))
+            if (!ResolveEndpoints(step, target, key, context, isColor, out var from, out var to, out error))
             {
                 return 0;
             }
@@ -109,6 +160,17 @@ namespace LitMotion.TweenEditor
                 Axis = axis,
                 Context = context,
             };
+
+            if (key == TweenChannelKey.TextNumber)
+            {
+                // The format is checked here, once, rather than failing on every frame's write.
+                writer.Counter = TweenCounterText.Create(context.Format);
+                if (writer.Counter == null)
+                {
+                    error = step.DisplayName + ": '" + context.Format + "' is not a valid format string.";
+                    return 0;
+                }
+            }
 
             switch (step.Type)
             {
@@ -129,8 +191,8 @@ namespace LitMotion.TweenEditor
         /// <summary>
         /// Works out the start and end values, honoring FromCurrent and Relative.
         /// </summary>
-        static bool ResolveEndpoints(TweenStep step, Object target, TweenChannelKey key, bool isColor,
-            out Vector4 from, out Vector4 to, out string error)
+        static bool ResolveEndpoints(TweenStep step, Object target, TweenChannelKey key,
+            in TweenChannelContext context, bool isColor, out Vector4 from, out Vector4 to, out string error)
         {
             error = null;
             from = isColor ? (Vector4)step.FromColor : step.From;
@@ -144,7 +206,7 @@ namespace LitMotion.TweenEditor
             // FromCurrent is also set.
             if (readable && (step.FromCurrent || step.FromOffset))
             {
-                if (!TweenChannelAccessor.TryRead(key, target, TweenChannelContext.For(step), out from))
+                if (!TweenChannelAccessor.TryRead(key, target, context, out from))
                 {
                     error = step.DisplayName + ": could not read the current value of " + key + ".";
                     return false;
@@ -489,9 +551,15 @@ namespace LitMotion.TweenEditor
         /// Checks that a MaterialProperty step has somewhere to write before the generic path
         /// reports the failure as an unreadable value.
         /// </summary>
-        static bool TryValidateMaterial(TweenStep step, Object target, out string error)
+        /// <remarks>
+        /// Also hands back the material that will actually be written. At runtime that is the
+        /// target's own instance, created here once if the target was still on a shared one.
+        /// </remarks>
+        static bool TryValidateMaterial(TweenStep step, Object target, in TweenChannelContext context,
+            out Material material, out string error)
         {
             error = null;
+            material = null;
 
             if (string.IsNullOrWhiteSpace(step.PropertyName))
             {
@@ -499,7 +567,7 @@ namespace LitMotion.TweenEditor
                 return false;
             }
 
-            var material = TweenChannelAccessor.ResolveMaterial(target);
+            material = TweenChannelAccessor.ResolveMaterialForWrite(target);
             if (material == null)
             {
                 error = step.DisplayName + ": " + target.name
@@ -507,7 +575,7 @@ namespace LitMotion.TweenEditor
                 return false;
             }
 
-            if (!material.HasProperty(Shader.PropertyToID(step.PropertyName)))
+            if (!material.HasProperty(context.PropertyId))
             {
                 error = step.DisplayName + ": " + material.name + " has no property called '"
                         + step.PropertyName + "'.";
@@ -599,8 +667,16 @@ namespace LitMotion.TweenEditor
             // A child motion that loops forever would give its parent sequence an infinite
             // duration, which no sequence can schedule. Animation-level Loops is the supported
             // way to repeat indefinitely.
-            var loops = step.Loops < 0 ? 1 : step.Loops;
+            var loops = EffectiveLoops(step);
             if (loops != 1) builder = builder.WithLoops(loops, step.LoopType);
+
+            if (alone)
+            {
+                // Standing in for the animation's sequence. The runner only takes this path when
+                // the step does not loop by itself, so the two loop settings never compete.
+                if (aloneLoops != 1) builder = builder.WithLoops(aloneLoops, aloneLoopType);
+                if (aloneOnComplete != null) builder = builder.WithOnComplete(aloneOnComplete);
+            }
 
             if (scheduler != null) builder = builder.WithScheduler(scheduler);
 

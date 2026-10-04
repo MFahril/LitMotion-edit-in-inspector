@@ -5,7 +5,7 @@ entirely from the Unity Inspector.
 
 - **Unity** 6000.6.3f1 (C# 9) · **LitMotion** 2.0.2 · **URP** 17.6.0 · **uGUI** 2.6.0
 - **Dependencies:** LitMotion + Unity only. No third-party packages.
-- **Status:** M1-M4 complete and verified in-editor. **297 / 297 EditMode tests pass.**
+- **Status:** M1-M5 complete and verified in-editor. **367 / 367 EditMode tests pass.**
 
 | Milestone | Scope | Status |
 |---|---|---|
@@ -13,6 +13,7 @@ entirely from the Unity Inspector.
 | **M2** | UI Toolkit timeline, ease-curve graph, playhead scrubbing, copy/paste | ✅ Complete, verified |
 | **M3** | Remaining 5 tween types, presets, named ids, TweenButton, TweenToggleable | ✅ Complete, verified |
 | **M4** | Authoring UX overhaul, customization, modularity — see [UX.md](UX.md) | ✅ Complete, verified |
+| **M5** | Runtime performance: per-frame GC, text hot paths, materials, `Play()` cost, one-step fast path | ✅ Complete, verified |
 
 ---
 
@@ -232,7 +233,7 @@ zoom extremes.
 |---|---|
 | `MaterialProperty` | Float / Color / Vector keyed by `Shader.PropertyToID`, through the shared channel table. A `Material` asset can be the step's Target directly. |
 | `TextReveal` | TMP `maxVisibleCharacters` / `Words` / `Lines`, driven as a **0–1 fraction** so a reveal survives the text changing length. |
-| `TextCounter` | A float through `string.Format`, on TMP or uGUI `Text`. A bad format string is refused once, not thrown every frame. |
+| `TextCounter` | A float through `string.Format`, on TMP or uGUI `Text`. A bad format string is refused once, not thrown every frame. *M5 replaced the per-frame `string.Format` with a reused buffer.* |
 | `TextScramble` ✦ | `LMotion.String.Create512Bytes` + `ScrambleMode`, bound with LitMotion's own `BindToText`. |
 | `TMPCharacter` ✦ | LitMotion's `BindToTMPChar*` extensions. `CharacterIndex = -1` builds **one motion per character**, each delayed by `Stagger` — a wave from a single step. |
 
@@ -623,6 +624,152 @@ with a test that would have caught them:
 
 **Still needs a human:** the feel of chip renaming and of dragging a preset onto the chips, and
 the window's split proportions on a small screen.
+
+---
+
+## M5 — Runtime performance ✅
+
+Done on 4 Oct 2026. Tests went from **297 to 367 EditMode tests, all passing** (3.6 s). The demo
+rig was played in real Play mode with a clean console.
+
+### What the audit found
+
+Measured in the editor (Mono) on 1,000 objects animating at once, against raw LitMotion:
+
+| Case | Per `Play` | Per frame | GC per frame |
+|---|---|---|---|
+| 1 step, raw LitMotion | 0.64 µs | 0.060 ms | 0 B |
+| 1 step, raw LitMotion inside `LSequence` | 1.70 µs | 0.240 ms | 0 B |
+| 1 step, `TweenPlayer.Play` path | 3.4 µs | 0.27 ms | 0 B |
+| 3 steps, raw LitMotion | 1.26 µs | 0.195 ms | 0 B |
+| 3 steps, raw LitMotion inside `LSequence` | 2.6–2.8 µs | 0.61 ms | 0 B |
+| 3 steps, `TweenPlayer.Play` path | 5.5 µs | 0.66 ms | 0 B |
+
+- **Editor code costs nothing at runtime.** It is an `Editor`-only assembly and ticks only while a
+  preview plays.
+- **About 90% of the per-frame gap is `LSequence`, not this package.** LitMotion's Burst job skips
+  sequence children (`MotionUpdateJob.cs:38`). The driver updates each child on the main thread
+  through `SetTime`. Our channel write layer adds about 5–10% on top of that.
+- **Transform, colour, alpha and camera channels allocated nothing per frame** even before M5.
+
+| # | Culprit | Where | Kind |
+|---|---|---|---|
+| C1 | TextReveal called `ForceMeshUpdate()` on **every frame's write** | `TweenChannelAccessor.TryWrite` → `CountUnits` | Hot path, CPU |
+| C2 | TextCounter ran `string.Format` + float boxing every frame | `TweenChannelAccessor.TryWrite`, `TextNumber` | Hot path, GC |
+| C3 | Snapshot captured on every `Play`, used only by `KillBehavior.Rewind` | `TweenPlayer.Play` | `Play` cost + GC |
+| C4 | `Play` allocated a run closure and an `OnComplete` delegate; step context built 2–3× | `TweenAnimationRunner.Build`, `TweenStepBuilder` | `Play` cost + GC |
+| C5 | Runtime `renderer.material` instances never destroyed; a runtime write to `graphic.material` edited the **shared asset**; the material was re-resolved every frame | `TweenChannelAccessor.ResolveMaterial` | Leak + correctness + CPU |
+| C6 | The first extension step in a player reflected over every type in every assembly | `TweenExtensionRegistry.FindAttributedTypes` | One-off hitch |
+| C7 | A one-step animation still paid for an `LSequence` (about 4× per frame) | `TweenAnimationRunner.Build` | Per-frame CPU |
+
+### Result
+
+Same harness and machine as the audit table. Per-`Play` numbers are for the default kill
+behavior. Rewind adds the snapshot, about +0.7 µs per step.
+
+| Case | Before: per `Play` | After: per `Play` | Before: per frame | After: per frame |
+|---|---|---|---|---|
+| 1 step | 3.4 µs | **1.3–1.4 µs** | 0.26 ms | **0.094 ms** |
+| 3 steps | 5.5 µs | 4.5–4.8 µs | 0.66 ms | 0.65 ms |
+
+- **One-step animations are about 2.8× cheaper per frame**, now 1.5× raw LitMotion instead of
+  4.5×. Many of the presets are one step.
+- **Multi-step animations are unchanged per frame**, as expected: that cost is LitMotion's
+  sequence. `Play` is cheaper because nothing is captured unless the kill behavior is Rewind.
+- **No channel allocates per frame** on either path, enforced by a test per channel family. The one
+  exception is a uGUI `Text` counter, which can only take a string, and gets one only when the shown
+  number changes.
+
+Rerun the numbers with the `[Explicit]` test `TweenPerformanceTests.Benchmark`.
+
+### What was built
+
+| Slice | Scope | Culprits | Status |
+|---|---|---|---|
+| **M5.0** | Zero-GC tests per channel family, TMP rebuild counter, `[Explicit]` benchmark | — | ✅ |
+| **M5.1** | Cheaper `Play()` | C3, C4 | ✅ |
+| **M5.2** | Text hot paths | C1, C2 | ✅ |
+| **M5.3** | Materials: owned instances, no asset writes, resolved once | C5 | ✅ |
+| **M5.4** | Extension registry: narrower player scan, `Prewarm()` | C6 | ✅ |
+| **M5.5** | One-step fast path | C7 | ✅ |
+| **M5.6** | Benchmark, demo rig in Play mode, README | — | ✅ |
+
+**M5.1 — `Play()`.** `TweenPlayer` captures a snapshot only for Rewind, and pools its running
+entries and snapshots. The runner's sequence configuration is a cached delegate reading
+main-thread static fields, not a closure per build. `TweenAnimation.CompleteInvoker` makes the
+`OnComplete.Invoke` delegate once per event; it is keyed by the event because `OnComplete` is a
+public field that can be replaced. `TweenChannelContext` is built once per step and passed down.
+One `TweenChannelWriter` per step per play remains, by decision.
+
+**M5.2 — Text.**
+- **TextReveal** reads TMP's existing `textInfo` and lays out only while `havePropertiesChanged`
+  says it is stale (`CountUnitsForWrite`). So a reveal still follows text that changes length.
+- **TextCounter** splits its format once into prefix, number spec and suffix
+  (`TweenCounterText`), and formats with `float.TryFormat` into a reused buffer:
+  - **TMP** gets the buffer through `SetCharArray`, and identical text is not rewritten.
+  - **uGUI `Text`** is compared with its own current text and given a string only when it differs.
+  - Formats the split cannot express fall back to `string.Format`: an alignment, two
+    placeholders, or escaped braces next to a spec.
+  - Output matches `string.Format` for every case tested, culture included.
+  - **A bad format is now a build error**, reported once, instead of an exception caught on every
+    frame.
+
+**M5.3 — Materials.**
+- Resolution is split in two.
+  - `ResolveMaterial` reads and never instances, so inspecting a step in play mode changes
+    nothing.
+  - `ResolveMaterialForWrite` is used by the builder and by writes.
+- At runtime, `TweenMaterialOwner` creates the target's instance, or a copy for a Graphic. It is a
+  hidden `[ExecuteAlways]` component on the target itself, and it destroys the instances it caused
+  when the object goes.
+- **The owner lives on the target, not on `TweenPlayer`** as first planned. A step can target an
+  object outside its player's hierarchy, and the instance belongs to the object, not to whoever
+  animated it.
+- A renderer still goes through `renderer.material`, so an instance the game already made is
+  reused, not copied.
+- The builder hands the resolved `Material` to the writer as its target, so the per-frame write is
+  a type check.
+
+**M5.4 — Registry.** In a player, `ScanAssemblies` skips runtime libraries by name and any
+assembly that does not reference this one. An assembly whose references cannot be read is scanned
+anyway. In this editor's domain, fewer than half the assemblies are considered, and the result
+matches `TypeCache` exactly. `TweenExtensionRegistry.Prewarm()` moves the scan to a loading
+screen.
+
+**M5.5 — Fast path.** `TweenAnimationRunner.CanRunAlone` accepts an animation with exactly one
+enabled step that:
+- starts at zero;
+- builds one motion: not a Callback, not per-character TMP, not Anchors set to Both;
+- and, if the animation loops, does not loop or delay by itself and loops as Restart or Yoyo.
+
+`TweenStepBuilder.BuildAlone` folds the animation's loops and completion into that step's own
+motion. Two things found while building it:
+
+- **Animation-level `Incremental` and `Flip` stay on the sequence.** The sequence's driver is a
+  linear time value, so on it `Incremental` runs children past their end and `Flip` reverses time.
+  On an eased motion the same settings mean something else.
+- **A seeded Shake draws different noise on the two paths.** LitMotion keys shake noise on a hash
+  of the exact motion time, and a sequence hands children `duration * (float)progress` rather than
+  the raw time. Scrubbing to a given time agrees exactly, and a seed still reproduces itself. But
+  the noise a seeded one-step shake draws is not the noise it drew before M5.
+
+`TweenFastPathTests` builds every scenario both ways on two objects with separate clocks. It
+compares them while scrubbing forwards and backwards, and while playing in real time at speed 1.5.
+It also compares `TotalDuration`, which sets the preview's scrub range. The results match to 1e-5.
+`TweenAnimationRunner.FastPathEnabled` exists so tests can force the sequence.
+
+### How the plan changed while building
+- The TMP rebuild check counts `TMPro_EventManager.TEXT_CHANGED_EVENT`, not a `ProfilerRecorder`.
+  Recorders only update at the end of a frame, which an EditMode test never reaches.
+- The TMP counter cannot be zero-GC *in the editor*: there, `SetCharArray` mirrors the text into
+  a string for the inspector (`#if UNITY_EDITOR` in TMP). The test checks what is ours: an
+  unchanged number is not rewritten.
+- Nothing needed `[Ignore]`. The fixes landed before the zero-GC tests first ran.
+
+### Still true, by design
+Inside a multi-step animation, LitMotion keeps writing a **finished** step's end value every
+frame until the whole sequence ends. A 0.2 s Fade in a 3 s animation sets alpha for 3 s. This is
+documented in the README.
 
 ---
 ---

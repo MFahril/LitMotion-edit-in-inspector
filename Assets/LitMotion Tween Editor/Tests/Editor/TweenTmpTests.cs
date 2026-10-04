@@ -151,6 +151,94 @@ namespace LitMotion.TweenEditor.Tests
             Assert.AreEqual(0f, value.x, 1e-4f);
         }
 
+        /// <summary>Counts TMP mesh generations on <see cref="text"/> while <paramref name="action"/> runs.</summary>
+        int CountRebuilds(System.Action action)
+        {
+            var rebuilds = 0;
+            void OnTextChanged(Object changed)
+            {
+                if (changed == text) rebuilds++;
+            }
+
+            TMPro_EventManager.TEXT_CHANGED_EVENT.Add(OnTextChanged);
+            try
+            {
+                action();
+            }
+            finally
+            {
+                TMPro_EventManager.TEXT_CHANGED_EVENT.Remove(OnTextChanged);
+            }
+
+            return rebuilds;
+        }
+
+        [Test]
+        public void ARevealWriteDoesNotForceALayoutOfFreshText()
+        {
+            // Each write used to force a full mesh rebuild just to count characters, then the
+            // new visible limit caused a second one. With TMP's text info already current, the
+            // write itself must lay nothing out; the canvas rebuild at the end of the frame does.
+            var step = Step(TweenType.TextReveal);
+            step.To = new Vector4(1f, 0f, 0f, 0f);
+            Assert.AreEqual(1, BuildPreserved(step, out var error), error);
+
+            SetTime(0.25f);
+            text.ForceMeshUpdate();
+
+            Assert.AreEqual(0, CountRebuilds(() => SetTime(0.5f)));
+            Assert.AreEqual(4, text.maxVisibleCharacters);
+        }
+
+        [Test]
+        public void ARevealStillFollowsTextThatChangedLength()
+        {
+            // The count is re-laid out only when the text is dirty -- which a length change is.
+            var step = Step(TweenType.TextReveal);
+            step.To = new Vector4(1f, 0f, 0f, 0f);
+            Assert.AreEqual(1, BuildPreserved(step, out var error), error);
+
+            SetTime(0.5f);
+            Assert.AreEqual(4, text.maxVisibleCharacters);
+
+            text.text = "LitMotion Tween!";
+            SetTime(0.5f);
+            Assert.AreEqual(8, text.maxVisibleCharacters, "half of sixteen characters");
+        }
+
+        [Test]
+        public void ACounterOnTmpWritesTheFormattedNumber()
+        {
+            var step = Step(TweenType.TextCounter);
+            step.From = Vector4.zero;
+            step.To = new Vector4(1500f, 0f, 0f, 0f);
+            step.TextFormat = "Score: {0:N0}";
+
+            Assert.AreEqual(1, BuildPreserved(step, out var error), error);
+
+            SetTime(0.5f);
+            Assert.AreEqual(string.Format("Score: {0:N0}", 750f), text.text);
+
+            SetTime(1f);
+            Assert.AreEqual(string.Format("Score: {0:N0}", 1500f), text.text);
+        }
+
+        [Test]
+        public void ACounterOnTmpDoesNotRebuildForAnUnchangedNumber()
+        {
+            var step = Step(TweenType.TextCounter);
+            step.From = new Vector4(5f, 0f, 0f, 0f);
+            step.To = new Vector4(5.4f, 0f, 0f, 0f);
+            step.TextFormat = "{0:0}";
+
+            Assert.AreEqual(1, BuildPreserved(step, out var error), error);
+            SetTime(0f);
+            text.ForceMeshUpdate();
+
+            SetTime(0.5f);
+            Assert.IsFalse(text.havePropertiesChanged, "the same digits were written again");
+        }
+
         [Test]
         public void RevealHonoursTheUnitOption()
         {

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools;
 
 namespace LitMotion.TweenEditor.Tests
 {
@@ -272,6 +273,181 @@ namespace LitMotion.TweenEditor.Tests
             SetTime(1f);
             Assert.AreEqual(2f, owner.transform.localScale.x, Tolerance);
 
+        }
+
+        // --- Runtime instances ---
+        //
+        // PlayingOverride runs the play-mode material path inside an EditMode test, which is the
+        // only way to check what a build does without a PlayMode suite.
+
+        static TweenStep RedColorStep()
+        {
+            var step = Step(TweenMaterialPropertyKind.Color, "_Color");
+            step.Ease = Ease.Linear;
+            step.FromCurrent = false;
+            step.FromColor = Color.white;
+            step.ToColor = Color.red;
+            return step;
+        }
+
+        [Test]
+        public void NothingIsInstancedOutsidePlayMode()
+        {
+            Assert.AreEqual(1, BuildPreserved(RedColorStep(), out var error), error);
+            SetTime(1f);
+
+            Assert.AreSame(material, owner.GetComponent<MeshRenderer>().sharedMaterial);
+            Assert.IsNull(owner.GetComponent<TweenMaterialOwner>());
+        }
+
+        [Test]
+        public void AtRuntimeARendererGetsItsOwnInstanceThatDiesWithIt()
+        {
+            // renderer.material complains when it instances outside play mode; that is this
+            // test's doing, not the code under test's.
+            LogAssert.ignoreFailingMessages = true;
+            TweenChannelAccessor.PlayingOverride = true;
+
+            try
+            {
+                material.SetColor("_Color", Color.white);
+                var renderer = owner.GetComponent<MeshRenderer>();
+
+                Assert.AreEqual(1, BuildPreserved(RedColorStep(), out var error), error);
+                SetTime(1f);
+
+                var instance = renderer.sharedMaterial;
+                Assert.AreNotSame(material, instance, "the renderer was not given its own instance");
+                Assert.AreEqual(Color.white, material.GetColor("_Color"), "the shared material was written");
+                Assert.AreEqual(Color.red, instance.GetColor("_Color"));
+
+                var tracker = owner.GetComponent<TweenMaterialOwner>();
+                Assert.IsNotNull(tracker);
+                Assert.IsTrue(tracker.Owns(instance));
+
+                // Playing again reuses the instance rather than stacking copies.
+                Assert.AreEqual(1, BuildPreserved(RedColorStep(), out error), error);
+                Assert.AreSame(instance, renderer.sharedMaterial);
+                Assert.AreEqual(1, tracker.Count);
+
+                CancelAll();
+                Object.DestroyImmediate(owner);
+                owner = null;
+
+                Assert.IsTrue(instance == null, "the instance outlived its renderer");
+            }
+            finally
+            {
+                TweenChannelAccessor.PlayingOverride = null;
+            }
+        }
+
+        [Test]
+        public void AtRuntimeInspectingAStepCreatesNoInstance()
+        {
+            TweenChannelAccessor.PlayingOverride = true;
+
+            try
+            {
+                Assert.AreSame(material, TweenChannelInfo.ResolveMaterial(RedColorStep(), owner));
+                Assert.AreSame(material, owner.GetComponent<MeshRenderer>().sharedMaterial);
+                Assert.IsNull(owner.GetComponent<TweenMaterialOwner>());
+            }
+            finally
+            {
+                TweenChannelAccessor.PlayingOverride = null;
+            }
+        }
+
+        [Test]
+        public void AtRuntimeARewindRestoresTheInstance()
+        {
+            LogAssert.ignoreFailingMessages = true;
+            TweenChannelAccessor.PlayingOverride = true;
+
+            try
+            {
+                material.SetColor("_Color", Color.green);
+
+                var animation = new TweenAnimation();
+                animation.Steps.Clear();
+                animation.Steps.Add(RedColorStep());
+
+                // The order TweenPlayer uses: capture, then build.
+                var snapshot = new TweenValueSnapshot();
+                snapshot.CaptureAnimation(animation, owner);
+
+                Assert.AreEqual(1, BuildPreserved(animation.Steps[0], out var error), error);
+                SetTime(1f);
+
+                var instance = owner.GetComponent<MeshRenderer>().sharedMaterial;
+                Assert.AreEqual(Color.red, instance.GetColor("_Color"));
+
+                CancelAll();
+                snapshot.Restore();
+
+                Assert.AreEqual(Color.green, instance.GetColor("_Color"));
+            }
+            finally
+            {
+                TweenChannelAccessor.PlayingOverride = null;
+            }
+        }
+
+#if LMTE_SUPPORT_UGUI
+        [Test]
+        public void AtRuntimeAGraphicNeverWritesItsMaterialAsset()
+        {
+            // graphic.material is the asset itself; writing it would animate every Graphic using
+            // it and, in the editor's play mode, change the asset on disk.
+            TweenChannelAccessor.PlayingOverride = true;
+            var ui = new GameObject("ui", typeof(RectTransform), typeof(UnityEngine.UI.Image));
+
+            try
+            {
+                var image = ui.GetComponent<UnityEngine.UI.Image>();
+                image.material = material;
+                material.SetColor("_Color", Color.white);
+
+                handles.Clear();
+                Assert.AreEqual(1, TweenStepBuilder.Build(RedColorStep(), ui, null, handles, out var error), error);
+                allHandles.AddRange(handles);
+                handles[0].Preserve();
+                SetTime(1f);
+
+                var copy = image.material;
+                Assert.AreNotSame(material, copy);
+                Assert.AreEqual(Color.white, material.GetColor("_Color"), "the material asset was written");
+                Assert.AreEqual(Color.red, copy.GetColor("_Color"));
+                Assert.IsTrue(ui.GetComponent<TweenMaterialOwner>().Owns(copy));
+
+                handles.Clear();
+                Assert.AreEqual(1, TweenStepBuilder.Build(RedColorStep(), ui, null, handles, out error), error);
+                allHandles.AddRange(handles);
+                Assert.AreSame(copy, image.material, "a second play made a second copy");
+
+                CancelAll();
+                Object.DestroyImmediate(ui);
+                ui = null;
+
+                Assert.IsTrue(copy == null, "the copy outlived its Graphic");
+            }
+            finally
+            {
+                TweenChannelAccessor.PlayingOverride = null;
+                if (ui != null) Object.DestroyImmediate(ui);
+            }
+        }
+#endif
+
+        void CancelAll()
+        {
+            for (var i = 0; i < allHandles.Count; i++)
+            {
+                if (allHandles[i].IsActive()) allHandles[i].Cancel();
+            }
+
+            allHandles.Clear();
         }
     }
 }

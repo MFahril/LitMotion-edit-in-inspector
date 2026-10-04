@@ -20,8 +20,19 @@ namespace LitMotion.TweenEditor
         public TweenAxis Axis = TweenAxis.All;
         public TweenChannelContext Context;
 
+        /// <summary>
+        /// The counter's reusable formatter, for <see cref="TweenChannelKey.TextNumber"/> only.
+        /// </summary>
+        public TweenCounterText Counter;
+
         public void WriteFloat(float value)
         {
+            if (Counter != null)
+            {
+                Counter.Write(Target, value);
+                return;
+            }
+
             TweenChannelAccessor.TryWrite(Key, Target, new Vector4(value, 0f, 0f, 0f), Axis, Context);
         }
 

@@ -40,6 +40,10 @@ namespace LitMotion.TweenEditor
         readonly List<RunningAnimation> running = new();
         readonly List<string> buildErrors = new();
 
+        // Finished entries and snapshots, reused by the next play instead of reallocated.
+        readonly Stack<RunningAnimation> spareEntries = new();
+        readonly Stack<TweenValueSnapshot> spareSnapshots = new();
+
         /// <summary>The animations defined inline on this player.</summary>
         public IReadOnlyList<TweenAnimation> Animations => animations;
 
@@ -132,10 +136,16 @@ namespace LitMotion.TweenEditor
             // Override replaces whatever is already running under this id; Additive layers on top.
             if (animation.BlendMode == TweenBlendMode.Override) StopInternal(animation.Id);
 
-            // Captured before building, because building reads the live values that FromCurrent
-            // steps depend on and Rewind must put back.
-            var snapshot = new TweenValueSnapshot();
-            snapshot.CaptureAnimation(animation, gameObject);
+            // Only Rewind ever puts the captured values back, so the other kill behaviors skip
+            // the capture: it resolves every step and reads every channel it touches. Captured
+            // before building, because building reads the live values that FromCurrent steps
+            // depend on and Rewind must put back.
+            TweenValueSnapshot snapshot = null;
+            if (animation.KillBehavior == TweenKillBehavior.Rewind)
+            {
+                snapshot = spareSnapshots.Count > 0 ? spareSnapshots.Pop() : new TweenValueSnapshot();
+                snapshot.CaptureAnimation(animation, gameObject);
+            }
 
             buildErrors.Clear();
             var scheduler = TweenAnimationRunner.GetRuntimeScheduler(animation);
@@ -149,15 +159,18 @@ namespace LitMotion.TweenEditor
                 }
             }
 
-            if (!handle.IsActive()) return MotionHandle.None;
-
-            running.Add(new RunningAnimation
+            if (!handle.IsActive())
             {
-                Id = animation.Id,
-                Handle = handle,
-                Snapshot = snapshot,
-                KillBehavior = animation.KillBehavior,
-            });
+                RecycleSnapshot(snapshot);
+                return MotionHandle.None;
+            }
+
+            var entry = spareEntries.Count > 0 ? spareEntries.Pop() : new RunningAnimation();
+            entry.Id = animation.Id;
+            entry.Handle = handle;
+            entry.Snapshot = snapshot;
+            entry.KillBehavior = animation.KillBehavior;
+            running.Add(entry);
 
             return handle;
         }
@@ -173,7 +186,7 @@ namespace LitMotion.TweenEditor
             for (var i = running.Count - 1; i >= 0; i--)
             {
                 Teardown(running[i]);
-                running.RemoveAt(i);
+                RemoveAt(i);
             }
         }
 
@@ -188,7 +201,7 @@ namespace LitMotion.TweenEditor
                 if (entry.Id != id) continue;
 
                 if (entry.Handle.IsActive()) entry.Handle.TryComplete();
-                running.RemoveAt(i);
+                RemoveAt(i);
             }
         }
 
@@ -207,7 +220,7 @@ namespace LitMotion.TweenEditor
                 if (entry.Id != id) continue;
 
                 Teardown(entry);
-                running.RemoveAt(i);
+                RemoveAt(i);
             }
         }
 
@@ -236,8 +249,29 @@ namespace LitMotion.TweenEditor
         {
             for (var i = running.Count - 1; i >= 0; i--)
             {
-                if (!running[i].Handle.IsActive()) running.RemoveAt(i);
+                if (!running[i].Handle.IsActive()) RemoveAt(i);
             }
+        }
+
+        /// <summary>Drops a running entry and keeps it, and its snapshot, for reuse.</summary>
+        void RemoveAt(int index)
+        {
+            var entry = running[index];
+            running.RemoveAt(index);
+
+            RecycleSnapshot(entry.Snapshot);
+            entry.Id = null;
+            entry.Handle = MotionHandle.None;
+            entry.Snapshot = null;
+            spareEntries.Push(entry);
+        }
+
+        void RecycleSnapshot(TweenValueSnapshot snapshot)
+        {
+            if (snapshot == null) return;
+
+            snapshot.Clear();
+            spareSnapshots.Push(snapshot);
         }
     }
 }

@@ -274,9 +274,15 @@ namespace LitMotion.TweenEditor
         /// </remarks>
         public static TweenAxis GetEffectiveAxis(TweenStep step, TweenChannelKey key)
         {
-            var kind = key == TweenChannelKey.Extension
-                ? GetValueKind(key, TweenChannelContext.For(step))
-                : GetValueKind(key);
+            return GetEffectiveAxis(step, key,
+                key == TweenChannelKey.Extension ? TweenChannelContext.For(step) : default);
+        }
+
+        /// <inheritdoc cref="GetEffectiveAxis(TweenStep, TweenChannelKey)"/>
+        /// <param name="context">The step's channel context, when the caller already has it.</param>
+        public static TweenAxis GetEffectiveAxis(TweenStep step, TweenChannelKey key, in TweenChannelContext context)
+        {
+            var kind = GetValueKind(key, context);
             if (kind is TweenValueKind.Float or TweenValueKind.Vector4) return TweenAxis.All;
 
             var axis = step == null ? TweenAxis.XYZ : step.Axis;
@@ -568,23 +574,24 @@ namespace LitMotion.TweenEditor
         }
 
         /// <summary>
-        /// The material a MaterialProperty step writes to.
+        /// Lets tests exercise the runtime material path without entering play mode.
+        /// </summary>
+        internal static bool? PlayingOverride;
+
+        static bool IsPlaying => PlayingOverride ?? Application.isPlaying;
+
+        /// <summary>
+        /// The material a MaterialProperty step reads from: whatever the target holds right now.
+        /// Never creates an instance, so inspecting a step cannot change the scene.
         /// </summary>
         /// <remarks>
-        /// At runtime this is the renderer's own material, so animating one object does not
-        /// bleed into every other object sharing that material. In the editor it is the shared
-        /// material instead: instancing there would leave a stray "(Instance)" material in the
-        /// scene that outlives the preview, which is worse than a property that is written and
-        /// then restored. Assign a Material directly to the step's Target to bypass the choice.
+        /// Once a play has given the target its own instance, this returns that instance, since
+        /// the instance is what the target now holds.
         /// </remarks>
         internal static Material ResolveMaterial(Object target)
         {
             if (target is Material direct) return direct;
-
-            if (target is Renderer renderer)
-            {
-                return Application.isPlaying ? renderer.material : renderer.sharedMaterial;
-            }
+            if (target is Renderer renderer) return renderer.sharedMaterial;
 
 #if LMTE_SUPPORT_UGUI
             if (target is Graphic graphic)
@@ -594,6 +601,41 @@ namespace LitMotion.TweenEditor
                 // The shared default UI material backs every unstyled Graphic in the project,
                 // so writing to it would animate all of them at once.
                 return material == Graphic.defaultGraphicMaterial ? null : material;
+            }
+#endif
+            return null;
+        }
+
+        /// <summary>
+        /// The material a MaterialProperty step writes to.
+        /// </summary>
+        /// <remarks>
+        /// At runtime this is the target's own instance, so animating one object does not bleed
+        /// into every other object sharing the material -- and, for a UI Graphic, does not edit
+        /// the material asset itself. <see cref="TweenMaterialOwner"/> creates the instance once
+        /// and destroys it with the object.
+        ///
+        /// In the editor it is the shared material instead: instancing there would leave a stray
+        /// "(Instance)" material in the scene that outlives the preview, which is worse than a
+        /// property that is written and then restored. Assign a Material directly to the step's
+        /// Target to bypass the choice.
+        /// </remarks>
+        internal static Material ResolveMaterialForWrite(Object target)
+        {
+            if (target is Material direct) return direct;
+
+            if (target is Renderer renderer)
+            {
+                return IsPlaying ? TweenMaterialOwner.ForRenderer(renderer) : renderer.sharedMaterial;
+            }
+
+#if LMTE_SUPPORT_UGUI
+            if (target is Graphic graphic)
+            {
+                var material = graphic.material;
+                if (material == null || material == Graphic.defaultGraphicMaterial) return null;
+
+                return IsPlaying ? TweenMaterialOwner.ForGraphic(graphic) : material;
             }
 #endif
             return null;
@@ -609,6 +651,36 @@ namespace LitMotion.TweenEditor
             text.ForceMeshUpdate();
             var info = text.textInfo;
             if (info == null) return 0;
+
+            return unit switch
+            {
+                TweenTextUnit.Words => info.wordCount,
+                TweenTextUnit.Lines => info.lineCount,
+                _ => info.characterCount,
+            };
+        }
+
+        /// <summary>
+        /// Total number of revealable units, laying the text out only when TMP's own text info
+        /// is stale.
+        /// </summary>
+        /// <remarks>
+        /// A reveal writes every frame. Forcing a layout on each write rebuilt the whole mesh
+        /// once for the count and again for the new visible limit. TMP clears
+        /// <c>havePropertiesChanged</c> whenever it lays out, so while that flag is down the
+        /// counts it already holds are current, including after the text changes length.
+        /// </remarks>
+        internal static int CountUnitsForWrite(TMP_Text text, TweenTextUnit unit)
+        {
+            if (text == null) return 0;
+
+            var info = text.textInfo;
+            if (info == null || text.havePropertiesChanged)
+            {
+                text.ForceMeshUpdate();
+                info = text.textInfo;
+                if (info == null) return 0;
+            }
 
             return unit switch
             {
@@ -770,21 +842,21 @@ namespace LitMotion.TweenEditor
 
                 case TweenChannelKey.MaterialFloat:
                 {
-                    var material = ResolveMaterial(target);
+                    var material = ResolveMaterialForWrite(target);
                     if (material == null || context.PropertyId == 0) return false;
                     material.SetFloat(context.PropertyId, value.x);
                     return true;
                 }
                 case TweenChannelKey.MaterialColor:
                 {
-                    var material = ResolveMaterial(target);
+                    var material = ResolveMaterialForWrite(target);
                     if (material == null || context.PropertyId == 0) return false;
                     material.SetColor(context.PropertyId, value);
                     return true;
                 }
                 case TweenChannelKey.MaterialVector:
                 {
-                    var material = ResolveMaterial(target);
+                    var material = ResolveMaterialForWrite(target);
                     if (material == null || context.PropertyId == 0) return false;
                     material.SetVector(context.PropertyId, value);
                     return true;
@@ -795,7 +867,7 @@ namespace LitMotion.TweenEditor
                 {
                     if (target is not TMP_Text revealTarget) return false;
 
-                    var total = CountUnits(revealTarget, context.TextUnit);
+                    var total = CountUnitsForWrite(revealTarget, context.TextUnit);
 
                     // Fully revealed means "no limit", not "limited to today's character count":
                     // writing the count back would clip the text the moment it grows longer.

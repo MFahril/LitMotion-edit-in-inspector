@@ -70,6 +70,189 @@ namespace LitMotion.TweenEditor.Tests
             field.SetValue(player, new List<TweenAnimation>(animations));
         }
 
+        // --- Player / kill behavior and the snapshot it needs ---
+
+        const string CountingId = "lmte.tests.counting-light-range";
+
+        /// <summary>A channel that counts how often its value is read.</summary>
+        sealed class CountingChannel : ITweenExtensionChannel
+        {
+            public int Reads;
+
+            public string DisplayName => "Counting";
+            public TweenValueShape Shape => TweenValueShape.Float;
+            public string Unit => "";
+
+            public bool TryResolve(TweenStep step, GameObject gameObject, out Object target, out string error)
+            {
+                target = gameObject.GetComponent<Light>();
+                error = null;
+                return target != null;
+            }
+
+            public bool TryRead(Object target, out Vector4 value)
+            {
+                Reads++;
+                value = new Vector4(((Light)target).range, 0f, 0f, 0f);
+                return true;
+            }
+
+            public bool TryWrite(Object target, Vector4 value)
+            {
+                ((Light)target).range = value.x;
+                return true;
+            }
+        }
+
+        TweenPlayer NewPlayer(out GameObject go)
+        {
+            go = NewObject("player");
+            return go.AddComponent<TweenPlayer>();
+        }
+
+        static TweenAnimation MoveBy(float x, TweenKillBehavior kill)
+        {
+            var animation = new TweenAnimation { Id = "Move", KillBehavior = kill };
+            animation.Steps.Clear();
+            animation.Steps.Add(new TweenStep
+            {
+                Type = TweenType.Move,
+                Enabled = true,
+                Duration = 1f,
+                Ease = Ease.Linear,
+                Relative = true,
+                To = new Vector4(x, 0f, 0f, 0f),
+            });
+            return animation;
+        }
+
+        [Test]
+        public void OnlyARewindingPlayReadsTheValuesItWouldRestore()
+        {
+            // Capturing resolves every step and reads every channel; nothing but Rewind ever
+            // reads the capture back, so the other kill behaviors must not pay for it.
+            var channel = new CountingChannel();
+            TweenExtensionRegistry.Register(CountingId, channel, "Tests");
+            var player = NewPlayer(out var go);
+            go.AddComponent<Light>();
+
+            try
+            {
+                var animation = new TweenAnimation { Id = "Range" };
+                animation.Steps.Clear();
+                animation.Steps.Add(new TweenStep
+                {
+                    Type = TweenType.Extension,
+                    ExtensionId = CountingId,
+                    Duration = 1f,
+                    FromCurrent = false,
+                    To = new Vector4(5f, 0f, 0f, 0f),
+                });
+
+                foreach (var kill in new[] { TweenKillBehavior.Cancel, TweenKillBehavior.Complete })
+                {
+                    animation.KillBehavior = kill;
+                    Assert.IsTrue(player.Play(animation).IsActive());
+                    player.StopAll();
+                    Assert.AreEqual(0, channel.Reads, kill + " captured a snapshot");
+                }
+
+                animation.KillBehavior = TweenKillBehavior.Rewind;
+                Assert.IsTrue(player.Play(animation).IsActive());
+                player.StopAll();
+                Assert.AreEqual(1, channel.Reads, "Rewind must capture what it restores");
+            }
+            finally
+            {
+                player.StopAll();
+                TweenExtensionRegistry.Unregister(CountingId);
+            }
+        }
+
+        [Test]
+        public void ARewindPutsTheObjectBackEveryTime()
+        {
+            // Repeated on purpose: snapshots are pooled, so a reused one must not carry over
+            // anything from the play before.
+            var player = NewPlayer(out var go);
+            go.transform.localPosition = new Vector3(1f, 2f, 3f);
+            var animation = MoveBy(10f, TweenKillBehavior.Rewind);
+
+            try
+            {
+                for (var round = 0; round < 3; round++)
+                {
+                    var handle = player.Play(animation);
+                    Assert.IsTrue(handle.IsActive());
+
+                    handle.Time = 0.5f;
+                    Assert.AreEqual(new Vector3(6f, 2f, 3f), go.transform.localPosition, "round " + round);
+
+                    player.Stop(animation.Id);
+                    Assert.AreEqual(new Vector3(1f, 2f, 3f), go.transform.localPosition, "round " + round);
+                }
+            }
+            finally
+            {
+                player.StopAll();
+            }
+        }
+
+        [Test]
+        public void AnOverridingRewindRestoresBeforeCapturingAgain()
+        {
+            // The restart stops the running play first, so the new capture sees the original
+            // values rather than the half-moved ones.
+            var player = NewPlayer(out var go);
+            go.transform.localPosition = Vector3.zero;
+            var animation = MoveBy(10f, TweenKillBehavior.Rewind);
+
+            try
+            {
+                var first = player.Play(animation);
+                first.Time = 0.5f;
+
+                var second = player.Play(animation);
+                Assert.IsFalse(first.IsActive(), "Override should have stopped the first play");
+                second.Time = 0.25f;
+
+                player.Stop(animation.Id);
+                Assert.AreEqual(Vector3.zero, go.transform.localPosition);
+            }
+            finally
+            {
+                player.StopAll();
+            }
+        }
+
+        [Test]
+        public void IsPlayingFollowsStopAndComplete()
+        {
+            var player = NewPlayer(out _);
+            var animation = MoveBy(1f, TweenKillBehavior.Cancel);
+
+            try
+            {
+                player.Play(animation);
+                Assert.IsTrue(player.IsPlaying(animation.Id));
+
+                player.Stop(animation.Id);
+                Assert.IsFalse(player.IsPlaying(animation.Id));
+
+                player.Play(animation);
+                player.Complete(animation.Id);
+                Assert.IsFalse(player.IsPlaying(animation.Id));
+
+                // Entries are reused after they finish; the next play must still be tracked.
+                player.Play(animation);
+                Assert.IsTrue(player.IsPlaying(animation.Id));
+            }
+            finally
+            {
+                player.StopAll();
+            }
+        }
+
         // --- Player / asset lookup ---
 
         [Test]

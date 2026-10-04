@@ -109,6 +109,19 @@ namespace LitMotion.TweenEditor
             return true;
         }
 
+        /// <summary>
+        /// Runs the discovery scan now rather than on first use.
+        /// </summary>
+        /// <remarks>
+        /// In a player the scan reflects over every type in the assemblies that can define a
+        /// channel, which the first Play of an extension step would otherwise pay for mid-game.
+        /// Call this from a loading screen to move that cost there. Does nothing once scanned.
+        /// </remarks>
+        public static void Prewarm()
+        {
+            EnsureScanned();
+        }
+
         /// <summary>Forgets everything and scans again on next use.</summary>
         public static void Rescan()
         {
@@ -207,11 +220,22 @@ namespace LitMotion.TweenEditor
 #if UNITY_EDITOR
             return UnityEditor.TypeCache.GetTypesWithAttribute<TweenExtensionChannelAttribute>();
 #else
+            return ScanAssemblies(AppDomain.CurrentDomain.GetAssemblies());
+#endif
+        }
+
+        /// <summary>
+        /// The player's discovery scan: every class carrying the channel attribute, in the
+        /// assemblies that could declare one.
+        /// </summary>
+        internal static List<Type> ScanAssemblies(Assembly[] assemblies)
+        {
             var found = new List<Type>();
-            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
 
             for (var i = 0; i < assemblies.Length; i++)
             {
+                if (!MayDefineChannels(assemblies[i])) continue;
+
                 Type[] types;
                 try
                 {
@@ -235,7 +259,56 @@ namespace LitMotion.TweenEditor
             }
 
             return found;
-#endif
+        }
+
+        /// <summary>
+        /// False for an assembly that cannot declare a channel, so its types are never loaded.
+        /// </summary>
+        /// <remarks>
+        /// A channel is marked with an attribute defined in this assembly, so only this assembly
+        /// and those referencing it can declare one. The runtime's own libraries are ruled out
+        /// by name before their reference tables are read. When the references cannot be read,
+        /// the assembly is scanned anyway: a slower start beats a channel that silently goes
+        /// missing.
+        /// </remarks>
+        internal static bool MayDefineChannels(Assembly assembly)
+        {
+            if (assembly == null || assembly.IsDynamic) return false;
+
+            var self = typeof(TweenExtensionChannelAttribute).Assembly;
+            if (assembly == self) return true;
+
+            var name = assembly.GetName().Name;
+            if (IsPlatformAssembly(name)) return false;
+
+            AssemblyName[] references;
+            try
+            {
+                references = assembly.GetReferencedAssemblies();
+            }
+            catch (Exception)
+            {
+                return true;
+            }
+
+            if (references == null || references.Length == 0) return true;
+
+            var selfName = self.GetName().Name;
+            for (var i = 0; i < references.Length; i++)
+            {
+                if (references[i].Name == selfName) return true;
+            }
+
+            return false;
+        }
+
+        static bool IsPlatformAssembly(string name)
+        {
+            return name is "mscorlib" or "netstandard" or "System"
+                   || name.StartsWith("System.", StringComparison.Ordinal)
+                   || name.StartsWith("Mono.", StringComparison.Ordinal)
+                   || name.StartsWith("UnityEngine", StringComparison.Ordinal)
+                   || name.StartsWith("UnityEditor", StringComparison.Ordinal);
         }
 
         /// <summary>The interpolation LitMotion runs for a shape.</summary>

@@ -176,6 +176,81 @@ namespace LitMotion.TweenEditor.Tests
             Assert.AreEqual("original", text.text, "a refused write must leave the text alone");
         }
 
+        [Test]
+        public void ABrokenFormatStringIsRefusedWhenTheStepIsBuilt()
+        {
+            // Once, with a reason, rather than a FormatException caught on every frame.
+            var step = Step(TweenType.TextCounter);
+            step.TextFormat = "{0:0";
+
+            Assert.AreEqual(0, BuildPreserved(step, out var error));
+            StringAssert.Contains("not a valid format string", error);
+            Assert.AreEqual("original", text.text);
+        }
+
+        [Test]
+        public void TheCounterWritesExactlyWhatStringFormatWould()
+        {
+            // The counter formats into a reused buffer instead of calling string.Format, so its
+            // output has to be checked against the real thing, culture and all.
+            var formats = new[]
+            {
+                "{0}", "{0:0}", "{0:N0}", "{0:N2}", "{0:F1}", "{0:0.00}", "{0:P0}", "{0:#,##0.0}",
+                "Score: {0:N0}", "{0:0} / 100", "HP {0:0}%", "{{{0:F1}}}", "{{literal}} {0}",
+                "{0,8:F2}", "{0} and {0:F1}",
+            };
+            var values = new[] { 0f, 1f, -1f, 0.5f, 3.14159f, 1234.5678f, -98765.4f, 1e-4f, 12345678f };
+
+            foreach (var format in formats)
+            {
+                var counter = TweenCounterText.Create(format);
+                Assert.IsNotNull(counter, format);
+
+                foreach (var value in values)
+                {
+                    counter.Write(text, value);
+                    Assert.AreEqual(string.Format(format, value), text.text, format + " with " + value);
+                }
+            }
+        }
+
+        [Test]
+        public void FormatsTheBufferCannotExpressFallBackToStringFormat()
+        {
+            Assert.IsTrue(TweenCounterText.Create("Score: {0:N0}").IsBuffered);
+            Assert.IsTrue(TweenCounterText.Create("{{{0}}}").IsBuffered);
+            Assert.IsFalse(TweenCounterText.Create("{0,8}").IsBuffered, "an alignment");
+            Assert.IsFalse(TweenCounterText.Create("{0} of {0}").IsBuffered, "two placeholders");
+            Assert.IsNull(TweenCounterText.Create("{1}"), "an index past the one argument is invalid");
+        }
+
+        [Test]
+        public void AnUnchangedNumberIsNotRewritten()
+        {
+            var counter = TweenCounterText.Create("{0:0}");
+            counter.Write(text, 5f);
+            var written = text.text;
+
+            counter.Write(text, 5.2f);
+            Assert.AreSame(written, text.text, "the same digits must not cost a new string");
+
+            counter.Write(text, 6f);
+            Assert.AreEqual("6", text.text);
+        }
+
+        [Test]
+        public void TextAnotherScriptWroteIsOverwrittenEvenWhenTheNumberIsUnchanged()
+        {
+            // uGUI compares with the label itself rather than with its own last write.
+            var counter = TweenCounterText.Create("{0:0}");
+            counter.Write(text, 5f);
+
+            text.text = "changed elsewhere";
+            counter.Write(text, 5f);
+
+            Assert.AreEqual("5", text.text);
+        }
+
         // --- Scramble ---
 
         [Test]

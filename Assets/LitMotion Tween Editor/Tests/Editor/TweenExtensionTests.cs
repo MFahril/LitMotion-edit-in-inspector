@@ -202,6 +202,73 @@ namespace LitMotion.TweenEditor.Tests
             Assert.AreEqual(TweenValueShape.Float, entry.Channel.Shape);
         }
 
+        [Test]
+        public void ThePlayerScanSkipsAssembliesThatCannotDeclareAChannel()
+        {
+            // The attribute lives in the runtime assembly, so nothing that does not reference it
+            // can carry it; reading those assemblies' types was the bulk of the first-use hitch.
+            Assert.IsFalse(TweenExtensionRegistry.MayDefineChannels(typeof(object).Assembly), "mscorlib");
+            Assert.IsFalse(TweenExtensionRegistry.MayDefineChannels(typeof(GameObject).Assembly), "UnityEngine");
+            Assert.IsFalse(TweenExtensionRegistry.MayDefineChannels(typeof(Assert).Assembly), "NUnit");
+
+            Assert.IsTrue(TweenExtensionRegistry.MayDefineChannels(typeof(TweenStep).Assembly), "the runtime itself");
+            Assert.IsTrue(TweenExtensionRegistry.MayDefineChannels(GetType().Assembly), "an assembly referencing it");
+        }
+
+        [Test]
+        public void ThePlayerScanFindsWhatTheEditorScanFinds()
+        {
+            // The player cannot use TypeCache, so its own scan must reach the same answer
+            // while skipping most of the domain.
+            // The same call a player makes, deliberately: this checks the player's scan, and a
+            // player has no domain reload for the analyzer's concern to apply to.
+#pragma warning disable UAC0005
+            var assemblies = System.AppDomain.CurrentDomain.GetAssemblies();
+#pragma warning restore UAC0005
+            var scanned = TweenExtensionRegistry.ScanAssemblies(assemblies);
+            var expected = UnityEditor.TypeCache.GetTypesWithAttribute<TweenExtensionChannelAttribute>();
+
+            CollectionAssert.AreEquivalent(expected, scanned);
+
+            var considered = 0;
+            for (var i = 0; i < assemblies.Length; i++)
+            {
+                if (TweenExtensionRegistry.MayDefineChannels(assemblies[i])) considered++;
+            }
+
+            Assert.Less(considered, assemblies.Length / 2,
+                "the filter should rule out most of a Unity domain (" + considered + " of " + assemblies.Length + ")");
+        }
+
+        [Test]
+        public void PrewarmScansWithoutWaitingForAStep()
+        {
+            var attributed = UnityEditor.TypeCache.GetTypesWithAttribute<TweenExtensionChannelAttribute>().Count;
+            if (attributed == 0) Assert.Ignore("No attributed channels in this project to scan for.");
+
+            TweenExtensionRegistry.Rescan();
+            var changes = 0;
+            void OnChanged() => changes++;
+            TweenExtensionRegistry.Changed += OnChanged;
+
+            try
+            {
+                TweenExtensionRegistry.Prewarm();
+            }
+            finally
+            {
+                TweenExtensionRegistry.Changed -= OnChanged;
+
+                // Rescan dropped the fixture's hand registrations; put them back for TearDown.
+                TweenExtensionRegistry.Register(RangeId, new LightRangeChannel(), "Tests");
+                TweenExtensionRegistry.Register(CenterId, new BoxCenterChannel(), "Tests");
+            }
+
+            Assert.AreEqual(0, changes, "the scan itself is not a change anyone needs to hear about");
+            Assert.AreEqual(attributed + 2, TweenExtensionRegistry.All.Count,
+                "every attributed channel, plus the fixture's two");
+        }
+
         // --- Description ---
 
         [Test]

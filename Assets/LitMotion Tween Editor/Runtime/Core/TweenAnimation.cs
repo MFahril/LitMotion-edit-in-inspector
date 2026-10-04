@@ -38,6 +38,28 @@ namespace LitMotion.TweenEditor
         [Tooltip("Invoked when the animation finishes on its own. Not invoked when cancelled.")]
         public UnityEvent OnComplete = new();
 
+        // OnComplete.Invoke as a delegate, made once rather than on every play. Keyed by the
+        // event it was made from, because OnComplete is a public field that can be replaced.
+        [NonSerialized] UnityEvent completeSource;
+        [NonSerialized] Action completeInvoker;
+
+        /// <summary>The delegate handed to LitMotion as the animation's completion callback.</summary>
+        internal Action CompleteInvoker
+        {
+            get
+            {
+                if (OnComplete == null) return null;
+
+                if (!ReferenceEquals(completeSource, OnComplete))
+                {
+                    completeSource = OnComplete;
+                    completeInvoker = OnComplete.Invoke;
+                }
+
+                return completeInvoker;
+            }
+        }
+
         /// <summary>
         /// Length of the animation for a single loop, in seconds: the latest end time across
         /// enabled steps. Returns <see cref="float.PositiveInfinity"/> if any step loops forever.
