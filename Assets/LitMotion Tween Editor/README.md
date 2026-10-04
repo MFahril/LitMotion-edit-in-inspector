@@ -35,10 +35,37 @@ behind it, see [ROADMAP.md](ROADMAP.md).
    ```
 
    Or set *Play On Enable* in the player's settings, or use `TweenButton` / `TweenToggleable`.
+   More ways to play from code are under [Playing from code](#playing-from-code).
 
 If a step cannot find anything to animate, its clip shows a warning badge and the preview bar
 says how many steps are failing. Click that readout for the reasons, and for a one-click fix
 where there is an obvious one (Add Canvas Group, Add Audio Source, Create Material, …).
+
+---
+
+## Playing from code
+
+```csharp
+var player = GetComponent<TweenPlayer>();
+
+// Wait for a play. True if it finished; false if it was stopped, replaced or never started.
+if (await player.PlayAsync(TweenAnimationId.Hide, destroyCancellationToken))
+    gameObject.SetActive(false);
+
+// A callback for this one play, without touching the animation's shared OnComplete event.
+player.Play(TweenAnimationId.Show, () => Debug.Log("shown"));
+
+// Pause and resume, keeping the animation's own playback speed.
+player.Pause(TweenAnimationId.Show);
+player.Resume(TweenAnimationId.Show);
+
+// One player, many pooled objects: steps without their own Target animate the object passed in.
+player.Play("Pop", pooledEnemy);
+player.Stop("Pop", pooledEnemy);
+```
+
+`Play` returns LitMotion's `MotionHandle`, so everything LitMotion offers on a handle works on a
+whole animation too, including `await player.Play(id)`.
 
 ---
 

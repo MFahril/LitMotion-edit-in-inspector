@@ -5,7 +5,8 @@ entirely from the Unity Inspector.
 
 - **Unity** 6000.6.3f1 (C# 9) · **LitMotion** 2.0.2 · **URP** 17.6.0 · **uGUI** 2.6.0
 - **Dependencies:** LitMotion + Unity only. No third-party packages.
-- **Status:** M1-M5 complete and verified in-editor. **367 / 367 EditMode tests pass.**
+- **Status:** M1-M6 complete and verified. **412 / 412 EditMode and 18 / 18 PlayMode tests
+  pass**, and a built player passes the 6 / 6 smoke test. M6.3, packaging, waits on a decision.
 
 | Milestone | Scope | Status |
 |---|---|---|
@@ -14,6 +15,7 @@ entirely from the Unity Inspector.
 | **M3** | Remaining 5 tween types, presets, named ids, TweenButton, TweenToggleable | ✅ Complete, verified |
 | **M4** | Authoring UX overhaul, customization, modularity — see [UX.md](UX.md) | ✅ Complete, verified |
 | **M5** | Runtime performance: per-frame GC, text hot paths, materials, `Play()` cost, one-step fast path | ✅ Complete, verified |
+| **M6** | Proven where it ships: player smoke build, PlayMode tests, code-facing API | ✅ Complete, verified (M6.3 packaging pending) |
 
 ---
 
@@ -770,6 +772,141 @@ It also compares `TotalDuration`, which sets the preview's scrub range. The resu
 Inside a multi-step animation, LitMotion keeps writing a **finished** step's end value every
 frame until the whole sequence ends. A 0.2 s Fade in a 3 s animation sets alpha for 3 s. This is
 documented in the README.
+
+---
+
+## M6 — Proven where it ships ✅
+
+Done on 4 Oct 2026, apart from M6.3, which waits on a decision.
+
+**Verified:**
+- **412 / 412 EditMode tests pass**, up from 367.
+- **18 / 18 PlayMode tests pass**, the package's first PlayMode suite.
+- **The player smoke test passes 6 / 6** in a Mono Windows player with managed stripping set to
+  High.
+
+The code was written while Unity MCP was disconnected and compiled first time once it came back.
+
+### Results from the built player
+
+```
+PASS extension channels survive the build -- 2 channels found by the player's scan in 3.2 ms
+PASS every rig animation plays -- 37 played across 18 players, 2 empty
+PASS jump runs in a player -- peak 1.000, landed at (2.000, 0.000, 0.000)
+PASS material instances -- own instance True, shared untouched True, instance destroyed with its object True
+PASS tmp counter adds no allocations to TMP's own -- over 60 frames: counter 2193 B, TMP changing directly 2091 B, idle 2091 B
+PASS console -- no errors or exceptions logged
+```
+
+- The two "empty" animations are rig content with no enabled steps.
+- **The TMP check was redesigned after its first run.** That run compared the counter with idle
+  frames and failed: 7,161 B against 2,091 B. That run's counter phase also contained TMP growing
+  its buffers the first time the label changed. The check now has a middle phase that changes the
+  same label through TMP's own `SetCharArray`. The counter is judged only on what it adds over
+  that: about 100 B over 60 frames, under 2 B a frame, so not a per-frame allocation.
+
+### Found while verifying
+
+- **An animation of zero length never ran its steps at runtime.** An animation made only of
+  Callback markers fired them in the preview, which scrubs, but never in play.
+  - LitMotion completes a zero-length sequence without setting its children's time, so they
+    never finish.
+  - The runner now pads such a sequence with `ZeroLengthPadding` (0.1 ms), so it runs its
+    children on the first frame.
+  - This predates M6. It was caught by the PlayMode button tests, which count plays with
+    marker-only animations, and now has its own EditMode test.
+- **A player build rewrites project settings.** The smoke build sets the backend and stripping
+  level and restores them, then saves, so the file matches.
+  - Saving leaves explicit `Standalone` entries (Mono, Disabled) where there were none. They hold
+    the same values as before.
+  - Unity itself also re-serializes the URP assets (shader prefiltering is computed at build
+    time), `GraphicsSettings`, and `UnityConnectSettings.m_Enabled`. That happens on any first
+    build of the project.
+- **Code that compiles only for a player** showed two warnings the editor never sees: a deprecated
+  `FindObjectsByType` overload in the runner, and analyzer `UAC0005` on the registry's player
+  scan. The first is fixed. The second is suppressed with the reason: a player has no domain
+  reload.
+
+### Why
+
+M1–M5 were verified only inside the editor:
+- **No player had ever been built.** The extension registry's player scan, code stripping, Burst
+  compiling the jump job, and TMP's zero-alloc `SetCharArray` path only exist in a player.
+- **There were no PlayMode tests.** M5 had to reach runtime materials through a
+  `PlayingOverride` seam.
+- **The code-facing API was thin.** You could not await a play, pause it, get a callback for one
+  play, or play on a pooled object.
+
+| Slice | Scope | Status |
+|---|---|---|
+| **M6.0** | Player smoke build: `Tools → LitMotion → Smoke Test → Build and Run Player` | ✅ 6 / 6 in a player |
+| **M6.1** | PlayMode suite, new `Tests/Runtime` assembly | ✅ 18 / 18 |
+| **M6.2** | `TweenPlayer` API: await, pause, per-play callback, pooled targets | ✅ 22 EditMode tests × fast path and sequence, plus 4 PlayMode tests |
+| **M6.3** | UPM packaging | ⏸ Waiting on a decision: is the package meant to be shared? |
+
+### M6.0 — Player smoke build
+- `Samples/Smoke/TweenSmokeRunner.cs` ships in the player but stays dormant unless the player is
+  started with `-lmteSmoke`. It runs these checks and writes `RESULT: PASS|FAIL`:
+  - the sample extension channels survive the build;
+  - every rig animation plays;
+  - a one-step Jump arcs and lands, on the Burst job path;
+  - a runtime material gets its own instance, leaves the shared material alone, and dies with
+    its object;
+  - a TMP counter allocates no more per frame than an idle baseline (development build,
+    `GC Allocated In Frame`);
+  - nothing is logged as an error.
+- `Samples/Smoke/Editor/TweenSmokeBuild.cs` builds `Assets/Scenes/TestScene.unity` for Windows,
+  runs the player, waits up to 120 s, and reads the report back. It also has a `-executeMethod`
+  entry point for CI.
+- **IL2CPP is not installed** for 6000.6.3f1; only Mono player variants are. The build uses IL2CPP
+  when the module is present and Mono otherwise. Either way managed stripping is set to **High**,
+  so Unity's linker runs. The project's own backend and stripping level are restored afterwards.
+
+### M6.1 — PlayMode suite
+These are the things only the real frame loop shows:
+- one-step and sequence plays reaching their end on the game clock;
+- `IgnoreTimeScale` at `timeScale = 0`;
+- `PlaybackSpeed`;
+- `playOnEnableId`;
+- disabling a player stops it;
+- Rewind after real time;
+- pause and resume;
+- awaiting a play, and a destroyed player resolving its awaits;
+- one player driving several pooled objects;
+- `TweenToggleable` hide-then-deactivate, and a show interrupting a hide;
+- `TweenButton` hover, press, click and unhover, the repeat-state guard, and non-interactable
+  clicks;
+- Renderer and Graphic material instances dying with their object, without the seam.
+
+### M6.2 — Code-facing API
+All of it is additive; nothing existing changed signature.
+
+| Call | Does |
+|---|---|
+| `Play(id, GameObject target)` | Plays on another object, for pooled or spawned objects. Steps with their own Target keep it. Override replaces a play of the same id **on the same target** only |
+| `Play(id, Action onComplete)` | A callback for this play only. It runs after the animation's `OnComplete`, and not on a stop |
+| `Awaitable<bool> PlayAsync(id[, target], token)` | `true` if the play finished or was completed, `false` if it was stopped, replaced, cancelled or never started. It never throws for those. A destroyed player resolves its awaits |
+| `Pause / Resume / PauseAll / ResumeAll / IsPaused` | Pause by setting the speed to 0, which is how LitMotion pauses, remembering the animation's own speed. A paused play still counts as playing |
+| `Stop(id, target)`, `IsPlaying(id, target)`, `IsPlayingAny()` | The per-target counterparts |
+
+How it works:
+- **Callbacks per play** go through an internal
+  `TweenAnimationRunner.Build(..., onComplete, onCancel)`. LitMotion's `WithOnComplete` and
+  `WithOnCancel` *add* to a sequence's own handlers rather than replacing them; this was checked,
+  so the sequence still releases its children.
+- **Re-entrancy fixed.** Completion runs callbacks synchronously in the middle of the player
+  walking its list of running plays, and that includes `OnComplete` listeners, which could
+  already do this before M6. The player now removes an entry before tearing it down, and its
+  loops tolerate the list changing. A test plays and stops from inside callbacks during `Complete`
+  and `StopAll`.
+- **Left out by decision:** a fluent code-side builder. LitMotion *is* the code-side API, and a
+  second builder over `TweenAnimation` would duplicate it.
+
+### Open
+- **M6.3:** packaging (`package.json`, `Samples~`, a CHANGELOG, a LICENSE, moving out of `Assets/`)
+  waits until it is decided whether the package is meant to be shared.
+- **IL2CPP:** add the *Windows Build Support (IL2CPP)* module in Unity Hub, and the smoke build
+  will use it with no code change.
 
 ---
 ---

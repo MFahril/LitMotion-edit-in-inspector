@@ -32,13 +32,21 @@ namespace LitMotion.TweenEditor
         static LoopType pendingLoopType;
         static IMotionScheduler pendingScheduler;
         static Action pendingOnComplete;
+        static Action pendingOnCancel;
 
         static readonly Action<MotionBuilder<double, NoOptions, DoubleMotionAdapter>> ConfigureDriver = builder =>
         {
             if (pendingLoops != 1) builder.WithLoops(pendingLoops, pendingLoopType);
             if (pendingScheduler != null) builder.WithScheduler(pendingScheduler);
+
+            // LitMotion adds these to the sequence's own completion handlers rather than
+            // replacing them, so the sequence still releases its children.
             if (pendingOnComplete != null) builder.WithOnComplete(pendingOnComplete);
+            if (pendingOnCancel != null) builder.WithOnCancel(pendingOnCancel);
         };
+
+        /// <summary>Length given to a sequence that would otherwise have none, in seconds.</summary>
+        internal const float ZeroLengthPadding = 1e-4f;
 
         /// <summary>
         /// Lets tests force every animation through a sequence, to compare it with the fast path.
@@ -62,11 +70,27 @@ namespace LitMotion.TweenEditor
         public static MotionHandle Build(TweenAnimation animation, GameObject fallback,
             IMotionScheduler scheduler, List<string> errors = null)
         {
+            return Build(animation, fallback, scheduler, errors, null, null);
+        }
+
+        /// <inheritdoc cref="Build(TweenAnimation, GameObject, IMotionScheduler, List{string})"/>
+        /// <param name="onComplete">
+        /// Called when this play finishes, after the animation's own <c>OnComplete</c>. Unlike that
+        /// event it belongs to this one play, so code can react without touching a shared event.
+        /// </param>
+        /// <param name="onCancel">Called when this play is cancelled rather than finished.</param>
+        internal static MotionHandle Build(TweenAnimation animation, GameObject fallback,
+            IMotionScheduler scheduler, List<string> errors, Action onComplete, Action onCancel)
+        {
             if (animation?.Steps == null || animation.Steps.Count == 0) return MotionHandle.None;
 
+            var completion = onComplete == null
+                ? animation.CompleteInvoker
+                : (Action)Delegate.Combine(animation.CompleteInvoker, onComplete);
+
             var driver = FastPathEnabled && CanRunAlone(animation, out var sole)
-                ? BuildAlone(animation, sole, fallback, scheduler, errors)
-                : BuildSequence(animation, fallback, scheduler, errors);
+                ? BuildAlone(sole, fallback, scheduler, errors, animation.Loops, animation.LoopType, completion, onCancel)
+                : BuildSequence(animation, fallback, scheduler, errors, completion, onCancel);
 
             if (!driver.IsActive()) return MotionHandle.None;
 
@@ -77,10 +101,11 @@ namespace LitMotion.TweenEditor
         }
 
         static MotionHandle BuildSequence(TweenAnimation animation, GameObject fallback,
-            IMotionScheduler scheduler, List<string> errors)
+            IMotionScheduler scheduler, List<string> errors, Action onComplete, Action onCancel)
         {
             var sequence = LSequence.Create();
             var inserted = 0;
+            var length = 0d;
 
             for (var i = 0; i < animation.Steps.Count; i++)
             {
@@ -93,11 +118,15 @@ namespace LitMotion.TweenEditor
                 if (error != null) errors?.Add(error);
                 if (built == 0) continue;
 
+                var start = Mathf.Max(0f, step.StartTime);
                 for (var h = 0; h < StepHandles.Count; h++)
                 {
+                    // Read before inserting: LitMotion refuses to describe a sequence's child.
+                    length = Math.Max(length, start + StepHandles[h].TotalDuration);
+
                     // Insert rather than Append: a step's StartTime is an absolute offset from
                     // the start of the animation, which is what the timeline UI edits.
-                    sequence.Insert(Mathf.Max(0f, step.StartTime), StepHandles[h]);
+                    sequence.Insert(start, StepHandles[h]);
                     inserted++;
                 }
             }
@@ -112,10 +141,17 @@ namespace LitMotion.TweenEditor
                 return MotionHandle.None;
             }
 
+            // A sequence of zero length completes without ever setting its children's time, so
+            // an animation made only of callback markers would never fire them at runtime --
+            // while the preview, which scrubs, would. A sliver of length makes the driver run
+            // its children once, on the first frame, like any other sequence.
+            if (length <= 0d) sequence.AppendInterval(ZeroLengthPadding);
+
             pendingLoops = animation.Loops;
             pendingLoopType = animation.LoopType;
             pendingScheduler = scheduler;
-            pendingOnComplete = animation.CompleteInvoker;
+            pendingOnComplete = onComplete;
+            pendingOnCancel = onCancel;
 
             try
             {
@@ -123,18 +159,19 @@ namespace LitMotion.TweenEditor
             }
             finally
             {
-                // Not holding on to a scheduler or an event past the call that used them.
+                // Not holding on to a scheduler or a callback past the call that used them.
                 pendingScheduler = null;
                 pendingOnComplete = null;
+                pendingOnCancel = null;
             }
         }
 
-        static MotionHandle BuildAlone(TweenAnimation animation, TweenStep step, GameObject fallback,
-            IMotionScheduler scheduler, List<string> errors)
+        static MotionHandle BuildAlone(TweenStep step, GameObject fallback, IMotionScheduler scheduler,
+            List<string> errors, int loops, LoopType loopType, Action onComplete, Action onCancel)
         {
             StepHandles.Clear();
             TweenStepBuilder.BuildAlone(step, fallback, scheduler, StepHandles, out var error,
-                animation.Loops, animation.LoopType, animation.CompleteInvoker);
+                loops, loopType, onComplete, onCancel);
 
             if (error != null) errors?.Add(error);
 
@@ -171,7 +208,8 @@ namespace LitMotion.TweenEditor
 
             switch (sole.Type)
             {
-                // Completes into its own callback, which the animation's OnComplete would replace.
+                // Its marker callback fires on its motion's completion; standing alone, that would
+                // run after the animation's OnComplete instead of before it.
                 case TweenType.Callback:
                 // Build more than one motion.
                 case TweenType.TMPCharacter:

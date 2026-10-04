@@ -399,6 +399,29 @@ namespace LitMotion.TweenEditor.Tests
         }
 
         [Test]
+        public void AnAnimationOfOnlyCallbacksStillFiresThemAtRuntime()
+        {
+            // A zero-length sequence completes without driving its children, so a marker-only
+            // animation used to fire nothing at runtime while firing in the preview.
+            var fired = 0;
+            var marker = Step(TweenType.Callback);
+            marker.Duration = 0f;
+            marker.OnCallback.AddListener(() => fired++);
+
+            var completed = 0;
+            var animation = Animation(marker);
+            animation.OnComplete.AddListener(() => completed++);
+
+            fastDriver = TweenAnimationRunner.Build(animation, fast, fastClock.Scheduler);
+            Assert.IsTrue(fastDriver.IsActive());
+
+            for (var frame = 0; frame < 5; frame++) fastClock.Update(Frame);
+
+            Assert.AreEqual(1, fired, "the marker");
+            Assert.AreEqual(1, completed, "the animation");
+        }
+
+        [Test]
         public void ALoopingStepWithoutAnimationLoopsStillTakesTheFastPath()
         {
             var step = Step(TweenType.Move);

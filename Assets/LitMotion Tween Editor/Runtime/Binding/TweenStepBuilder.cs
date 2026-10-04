@@ -30,6 +30,7 @@ namespace LitMotion.TweenEditor
         static int aloneLoops;
         static LoopType aloneLoopType;
         static Action aloneOnComplete;
+        static Action aloneOnCancel;
 
         /// <summary>
         /// Builds a step that stands in for its whole animation: the animation's loops and
@@ -40,12 +41,14 @@ namespace LitMotion.TweenEditor
         /// which is what guarantees one motion and no clash with the step's own loops.
         /// </remarks>
         internal static int BuildAlone(TweenStep step, GameObject fallback, IMotionScheduler scheduler,
-            List<MotionHandle> results, out string error, int loops, LoopType loopType, Action onComplete)
+            List<MotionHandle> results, out string error, int loops, LoopType loopType, Action onComplete,
+            Action onCancel)
         {
             alone = true;
             aloneLoops = loops;
             aloneLoopType = loopType;
             aloneOnComplete = onComplete;
+            aloneOnCancel = onCancel;
 
             try
             {
@@ -55,6 +58,7 @@ namespace LitMotion.TweenEditor
             {
                 alone = false;
                 aloneOnComplete = null;
+                aloneOnCancel = null;
             }
         }
 
@@ -676,6 +680,7 @@ namespace LitMotion.TweenEditor
                 // the step does not loop by itself, so the two loop settings never compete.
                 if (aloneLoops != 1) builder = builder.WithLoops(aloneLoops, aloneLoopType);
                 if (aloneOnComplete != null) builder = builder.WithOnComplete(aloneOnComplete);
+                if (aloneOnCancel != null) builder = builder.WithOnCancel(aloneOnCancel);
             }
 
             if (scheduler != null) builder = builder.WithScheduler(scheduler);

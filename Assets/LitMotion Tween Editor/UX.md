@@ -216,5 +216,9 @@ gesture is an invariant of the timeline, not a preference.
 - ✅ `Play` / `Stop` / `Complete` / `Restart` / `IsPlaying`, inline or asset lookup, blend and kill
 - ✅ `TweenButton` mapping interaction states to ids; `TweenToggleable` ordering show and hide
   around activation
-- ⬜ `await player.PlayAsync(id)`, a fluent code-side builder, and a `Play(id, target)` override
-  for pooled objects
+- ✅ **`await player.PlayAsync(id)`** with a finished-or-stopped result and a cancellation token
+  (M6)
+- ✅ **`Play(id, target)`** for pooled objects, with per-target Override, Stop and IsPlaying
+  (M6)
+- ✅ **`Pause` / `Resume`** and a **per-play completion callback** (M6)
+- A fluent code-side builder was considered and dropped: LitMotion itself is the code-side API

@@ -220,7 +220,11 @@ namespace LitMotion.TweenEditor
 #if UNITY_EDITOR
             return UnityEditor.TypeCache.GetTypesWithAttribute<TweenExtensionChannelAttribute>();
 #else
+            // The analyzer's concern is assemblies left over from an editor domain reload; a
+            // player has no domain reloads.
+#pragma warning disable UAC0005
             return ScanAssemblies(AppDomain.CurrentDomain.GetAssemblies());
+#pragma warning restore UAC0005
 #endif
         }
 
