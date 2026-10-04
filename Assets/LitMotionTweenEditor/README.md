@@ -4,7 +4,7 @@ Author, chain, preview and scrub [LitMotion](https://github.com/annulusgames/Lit
 animations from the Unity editor — on a timeline, with exact edit-mode preview, and without
 writing code.
 
-- **Unity** 6000.6+ · **LitMotion** 2.0.2 · optional uGUI, TextMeshPro and URP support
+- **Version 0.1.1** · **Unity** 6000.6+ · **LitMotion** 2.0.2 · optional uGUI, TextMeshPro and URP support
 - 24 tween types, 31 eases plus custom curves, presets, and your own channels via extensions
 
 For what the tool does and why, see [UX.md](UX.md). For how it is built and the decisions
@@ -47,6 +47,10 @@ Or add both lines to `Packages/manifest.json` by hand:
 uGUI, TextMeshPro and URP support switch on by themselves when those packages are present.
 Nothing has to be configured.
 
+**Updating:** an installed copy stays on the commit it was installed from until you choose to
+update. Select the package in the Package Manager and click **Update**, or pin a release by
+adding its tag to the URL, such as `#v0.1.1`.
+
 ---
 
 ## Quickstart
@@ -58,6 +62,8 @@ Nothing has to be configured.
    (Show, Hide, …) — or *Add From Preset…*, or drag a preset from
    **Window → LitMotion → Tween Presets** onto the animation chips.
 3. **Add steps.** *Add Step…* or the `+` on the timeline toolbar. Each step is a clip.
+   A new clip already does something visible, at a modest size for its object: world units on a
+   3D object (a Move goes 1 unit) and pixels on a UI element (a Move goes 100).
 4. **Arrange them.** Drag a clip to move it, drag its edges to trim. Clips snap to the grid,
    to each other and to the playhead. Right-click for everything else.
 5. **Tune a step.** Click a clip; its controls appear below the timeline (beside it in the
