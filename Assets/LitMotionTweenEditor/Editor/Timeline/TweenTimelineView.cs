@@ -1252,7 +1252,7 @@ namespace LitMotion.TweenEditor.Editor
                 var step = StepAt(context.Selection[i]);
                 if (step == null) continue;
 
-                TweenStepDefaults.Apply(step, step.Type, step.StartTime);
+                TweenStepDefaults.Apply(step, step.Type, step.StartTime, context.TargetProvider?.Invoke());
             }
 
             EditorUtility.SetDirty(serialized.targetObject);
@@ -1380,7 +1380,8 @@ namespace LitMotion.TweenEditor.Editor
                         if (!float.IsInfinity(end) && end > previousEnd) previousEnd = end;
                     }
 
-                    TweenStepDefaults.Apply(step, type, previousEnd);
+                    // Sized for what it will animate: pixels on a UI element, world units elsewhere.
+                    TweenStepDefaults.Apply(step, type, previousEnd, context.TargetProvider?.Invoke());
                     if (type == TweenType.Extension) step.ExtensionId = extensionId ?? string.Empty;
 
                     var settings = TweenEditorSettings.instance;

@@ -18,6 +18,25 @@ First release as a Unity package, installable from a Git URL.
 - A PlayMode test suite, and a player smoke test in the development repository.
 
 ### Changed
+- **A newly added clip starts at a modest size for what it animates.** Distances are world units
+  on a 3D object (Move 1, Jump 1 forward and 0.5 high, Punch 0.25, Shake 0.1) and pixels on a UI
+  element (Move 100, Jump 100 and 50, Punch 25, Shake 10). Before, every target got pixel-sized
+  values, so a new Move sent a 3D object 100 units away.
+- **Every default now changes a freshly made object.** Before, several went to values a new
+  object already has:
+
+  | Clip | Default before | Default now |
+  |---|---|---|
+  | Color | white | soft red |
+  | Camera | field of view 60 | 45 |
+  | Audio pitch | 1 | 1.5 |
+  | Volume weight | 1 | 0, fading out |
+  | Fill amount | to 1 | fills from 0 |
+  | Pivot | (0.5, 0.5) | the left edge |
+  | Anchors | (0.5, 0.5) | the top centre |
+  | Rotate | half turn | quarter turn |
+- The Jump height slider's range follows the target's units (0–4 or 0–400), and stretches to
+  include any existing value instead of clamping it.
 - A one-step animation runs as a single LitMotion motion instead of a sequence, which makes it
   about 2.8× cheaper per frame.
 - No channel allocates per frame. The exception is a uGUI `Text` counter, which allocates only

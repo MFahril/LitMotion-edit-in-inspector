@@ -642,8 +642,11 @@ namespace LitMotion.TweenEditor.Editor
                     TweenFieldRanges.JumpCountMin, TweenFieldRanges.JumpCountMax,
                     "How many hops the step makes"));
 
+                var scale = TweenStepDefaults.DistanceScale(TargetProvider?.Invoke());
+                var power = stepProperty.FindPropertyRelative("JumpPower").floatValue;
+
                 body.Add(FloatSlider("JumpPower", "Height",
-                    TweenFieldRanges.JumpPowerMin, TweenFieldRanges.JumpPowerMax,
+                    TweenFieldRanges.JumpPowerMin, TweenFieldRanges.JumpPowerMax(scale, power),
                     "Peak height of the first arc, in the step's own units"));
             }
 

@@ -28,12 +28,26 @@ namespace LitMotion.TweenEditor.Editor
         public const int JumpCountMin = 1;
         public const int JumpCountMax = 10;
 
-        /// <summary>
-        /// Peak height of a jump arc. Generous at the top because UI steps work in pixels,
-        /// where a 200-unit arc is modest.
-        /// </summary>
+        /// <summary>Peak height of a jump arc.</summary>
         public const float JumpPowerMin = 0f;
-        public const float JumpPowerMax = 400f;
+
+        /// <summary>Top of the jump height range, in world units.</summary>
+        public const float JumpPowerMaxWorld = 4f;
+
+        /// <summary>
+        /// Top of the jump height range for a target whose distances are scaled by
+        /// <paramref name="distanceScale"/>: 4 world units, or 400 pixels on a UI element.
+        /// </summary>
+        /// <remarks>
+        /// One fixed range cannot serve both: 0-400 makes a 3D hop of 0.5 a sliver at the left
+        /// end of the track, and 0-4 makes a UI hop impossible to drag to. The range also always
+        /// stretches to include <paramref name="current"/>, because the slider clamps, and a
+        /// value from before this range existed must not be cut down just by being looked at.
+        /// </remarks>
+        public static float JumpPowerMax(float distanceScale, float current = 0f)
+        {
+            return Mathf.Max(JumpPowerMaxWorld * Mathf.Max(1f, distanceScale), current);
+        }
 
         /// <summary>Per-character delay for a TMP wave.</summary>
         public const float StaggerMin = 0f;

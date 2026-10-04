@@ -145,7 +145,17 @@ namespace LitMotion.TweenEditor.Tests
             Assert.IsTrue(TweenFieldRanges.IsInRange(step.JumpCount,
                 TweenFieldRanges.JumpCountMin, TweenFieldRanges.JumpCountMax));
             Assert.IsTrue(TweenFieldRanges.IsInRange(step.JumpPower,
-                TweenFieldRanges.JumpPowerMin, TweenFieldRanges.JumpPowerMax));
+                TweenFieldRanges.JumpPowerMin, TweenFieldRanges.JumpPowerMax(1f)));
+
+            // And in the middle of the track rather than pinned near one end, for both kinds of
+            // target, which is what scaling the range with the units is for.
+            var uiScale = TweenStepDefaults.UiPixelsPerUnit;
+            var worldPower = step.JumpPower;
+            Assert.That(worldPower / TweenFieldRanges.JumpPowerMax(1f), Is.InRange(0.05f, 0.5f));
+            Assert.That(worldPower * uiScale / TweenFieldRanges.JumpPowerMax(uiScale), Is.InRange(0.05f, 0.5f));
+
+            // A value from before the range existed is never cut down by the slider.
+            Assert.AreEqual(60f, TweenFieldRanges.JumpPowerMax(1f, 60f));
 
             TweenStepDefaults.Apply(step, TweenType.TMPCharacter, 0f);
             Assert.IsTrue(TweenFieldRanges.IsInRange(step.Stagger,

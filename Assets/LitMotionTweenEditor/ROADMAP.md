@@ -1009,6 +1009,14 @@ are 3D; 10, 11, 15 and 16 live on the canvas. `12 Material` has its own
 `Assets/LitMotionTweenEditorSamples/DemoMaterial.mat` on purpose, so a preview never writes to a material shared with
 anything else.
 
+**The defaults rig.** `TestScene` also holds **LMTE Defaults Rig**: one sample per tween type,
+each with a single clip made by `TweenStepDefaults.Apply` exactly as the timeline adds one.
+- 12 sit on 3D objects in a row below the main rig, at y −2.5.
+- 16 sit on UI elements along the bottom of their own overlay canvas. Each UI element is inside a
+  100 × 100 cell, so pivot and anchor clips behave as on a fresh element.
+- Select any of them and press Play in the preview bar to see what a new clip of that type does.
+  `TweenStepDefaultsTests` checks the same thing automatically.
+
 **A test that builds motions must track every handle it creates.** Building without a
 scheduler schedules on the editor dispatcher, so a forgotten handle completes later — against
 an object the test has already destroyed.
