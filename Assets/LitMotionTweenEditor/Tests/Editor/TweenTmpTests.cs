@@ -25,7 +25,9 @@ namespace LitMotion.TweenEditor.Tests
         [SetUp]
         public void SetUp()
         {
-            if (TMP_Settings.defaultFontAsset == null)
+            // TMP_Settings.defaultFontAsset throws when the settings asset itself is missing, as it is
+            // in a fresh project, so the instance is checked first.
+            if (TMP_Settings.instance == null || TMP_Settings.defaultFontAsset == null)
             {
                 Assert.Ignore("TMP Essential Resources are not imported in this project.");
             }

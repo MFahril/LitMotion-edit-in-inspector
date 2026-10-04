@@ -31,6 +31,23 @@ namespace LitMotion.TweenEditor.Tests
         }
 
         [Test]
+        public void RegeneratingWritesWhereThePresetsAre()
+        {
+            // Regenerating overwrites the shipped presets in place, so references to them keep
+            // working -- unless the package is installed read-only, when a copy goes into the
+            // project instead.
+            var folder = TweenPresetGenerator.ResolveFolder();
+
+            if (folder == "Assets/LitMotion Tween Presets")
+            {
+                Assert.Pass("The package is installed read-only, so regenerating writes into the project.");
+            }
+
+            Assert.IsNotNull(UnityEditor.AssetDatabase.LoadAssetAtPath<TweenAnimationAsset>(folder + "/FadeIn.asset"),
+                "the shipped presets are not in " + folder);
+        }
+
+        [Test]
         public void TheLibraryHasFourteenPresets()
         {
             Assert.AreEqual(14, TweenPresetGenerator.Build().Count);

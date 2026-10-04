@@ -206,7 +206,7 @@ gesture is an invariant of the timeline, not a preference.
 - ✅ **Extension channels**: implement `ITweenExtensionChannel`, mark it
   `[TweenExtensionChannel("your.id")]`, and it appears in the add menu. Build, preview, snapshot
   and restore, value modes, axis masking, grab and apply all work, with no further code. A
-  worked example animating `Light` intensity and colour ships in `Samples/Extensions`
+  worked example animating `Light` intensity and colour lives in the development repository, in `Assets/LitMotionTweenEditorSamples/Extensions`
 - ✅ **A custom inspector section per extension**: derive from `TweenExtensionInspector` and mark
   it `[TweenExtensionInspector("your.id")]`
 - ⬜ Extension presets shipped by a third party

@@ -8,7 +8,44 @@ writing code.
 - 24 tween types, 31 eases plus custom curves, presets, and your own channels via extensions
 
 For what the tool does and why, see [UX.md](UX.md). For how it is built and the decisions
-behind it, see [ROADMAP.md](ROADMAP.md).
+behind it, see [ROADMAP.md](ROADMAP.md). Changes by version are in [CHANGELOG.md](CHANGELOG.md).
+
+---
+
+## Installation
+
+You need Unity 6000.6 or newer, and [Git](https://git-scm.com/) installed and on your `PATH`.
+Unity's Package Manager runs Git to fetch a Git URL package.
+
+1. **Install LitMotion.** In Unity, open **Window → Package Manager**, click **+** at the top
+   left, choose **Install package from git URL…**, and enter:
+
+   ```
+   https://github.com/annulusgames/LitMotion.git?path=src/LitMotion/Assets/LitMotion
+   ```
+
+2. **Install LitMotion Tween Editor** the same way, with:
+
+   ```
+   https://github.com/MFahril/LitMotion-edit-in-inspector.git?path=Assets/LitMotionTweenEditor
+   ```
+
+LitMotion has to go in first. This package depends on it, but Unity cannot fetch a dependency
+from a Git URL by itself.
+
+Or add both lines to `Packages/manifest.json` by hand:
+
+```json
+{
+  "dependencies": {
+    "com.annulusgames.lit-motion": "https://github.com/annulusgames/LitMotion.git?path=src/LitMotion/Assets/LitMotion",
+    "com.mfahril.litmotion-tween-editor": "https://github.com/MFahril/LitMotion-edit-in-inspector.git?path=Assets/LitMotionTweenEditor"
+  }
+}
+```
+
+uGUI, TextMeshPro and URP support switch on by themselves when those packages are present.
+Nothing has to be configured.
 
 ---
 
@@ -105,7 +142,7 @@ Active while the timeline has focus. **Keys** in the editor shows the same list.
 | Window → LitMotion → Tween Editor | Dockable editor; follows the selection until locked |
 | Window → LitMotion → Tween Presets | Searchable preset browser; drag onto the chips |
 | Preferences → LitMotion Tween Editor | Defaults for new steps, snapping, zoom, lane height, colours |
-| Tools → LitMotion → Generate Tween Presets | Writes the 14 built-in presets |
+| Tools → LitMotion → Generate Tween Presets | Writes the 14 built-in presets. The package already ships them; when it is installed read-only, regenerating writes a copy to `Assets/LitMotion Tween Presets` |
 
 ---
 
@@ -158,7 +195,9 @@ public sealed class LightIntensityChannel : ITweenExtensionChannel
   `[TweenExtensionInspector("com.mystudio.light-intensity")]`.
 
 A complete worked example, with a colour channel and a custom inspector section, is in
-[`Samples/Extensions`](Samples/Extensions).
+[`Assets/LitMotionTweenEditorSamples/Extensions`](https://github.com/MFahril/LitMotion-edit-in-inspector/tree/main/Assets/LitMotionTweenEditorSamples/Extensions)
+in the development repository. It is not part of the installed package, so its sample channels
+do not show up in your project's add menu.
 
 In a player, channels are found by a one-time reflection scan of the assemblies that reference
 this package, on the first Play of an extension step. Call `TweenExtensionRegistry.Prewarm()`

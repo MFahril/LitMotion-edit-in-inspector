@@ -6,7 +6,7 @@ entirely from the Unity Inspector.
 - **Unity** 6000.6.3f1 (C# 9) · **LitMotion** 2.0.2 · **URP** 17.6.0 · **uGUI** 2.6.0
 - **Dependencies:** LitMotion + Unity only. No third-party packages.
 - **Status:** M1-M6 complete and verified. **412 / 412 EditMode and 18 / 18 PlayMode tests
-  pass**, and a built player passes the 6 / 6 smoke test. M6.3, packaging, waits on a decision.
+  pass**, and a built player passes the 6 / 6 smoke test. The package installs from a Git URL (M6.3).
 
 | Milestone | Scope | Status |
 |---|---|---|
@@ -15,7 +15,7 @@ entirely from the Unity Inspector.
 | **M3** | Remaining 5 tween types, presets, named ids, TweenButton, TweenToggleable | ✅ Complete, verified |
 | **M4** | Authoring UX overhaul, customization, modularity — see [UX.md](UX.md) | ✅ Complete, verified |
 | **M5** | Runtime performance: per-frame GC, text hot paths, materials, `Play()` cost, one-step fast path | ✅ Complete, verified |
-| **M6** | Proven where it ships: player smoke build, PlayMode tests, code-facing API | ✅ Complete, verified (M6.3 packaging pending) |
+| **M6** | Proven where it ships: player smoke build, PlayMode tests, code-facing API | ✅ Complete, verified; installable as a Unity package |
 
 ---
 
@@ -777,7 +777,7 @@ documented in the README.
 
 ## M6 — Proven where it ships ✅
 
-Done on 4 Oct 2026, apart from M6.3, which waits on a decision.
+Done on 4 Oct 2026.
 
 **Verified:**
 - **412 / 412 EditMode tests pass**, up from 367.
@@ -842,10 +842,10 @@ M1–M5 were verified only inside the editor:
 | **M6.0** | Player smoke build: `Tools → LitMotion → Smoke Test → Build and Run Player` | ✅ 6 / 6 in a player |
 | **M6.1** | PlayMode suite, new `Tests/Runtime` assembly | ✅ 18 / 18 |
 | **M6.2** | `TweenPlayer` API: await, pause, per-play callback, pooled targets | ✅ 22 EditMode tests × fast path and sequence, plus 4 PlayMode tests |
-| **M6.3** | UPM packaging | ⏸ Waiting on a decision: is the package meant to be shared? |
+| **M6.3** | Unity package: `package.json`, Git URL install, samples moved out | ✅ |
 
 ### M6.0 — Player smoke build
-- `Samples/Smoke/TweenSmokeRunner.cs` ships in the player but stays dormant unless the player is
+- `Assets/LitMotionTweenEditorSamples/Smoke/TweenSmokeRunner.cs` ships in the player but stays dormant unless the player is
   started with `-lmteSmoke`. It runs these checks and writes `RESULT: PASS|FAIL`:
   - the sample extension channels survive the build;
   - every rig animation plays;
@@ -855,7 +855,7 @@ M1–M5 were verified only inside the editor:
   - a TMP counter allocates no more per frame than an idle baseline (development build,
     `GC Allocated In Frame`);
   - nothing is logged as an error.
-- `Samples/Smoke/Editor/TweenSmokeBuild.cs` builds `Assets/Scenes/TestScene.unity` for Windows,
+- `Assets/LitMotionTweenEditorSamples/Smoke/Editor/TweenSmokeBuild.cs` builds `Assets/Scenes/TestScene.unity` for Windows,
   runs the player, waits up to 120 s, and reads the report back. It also has a `-executeMethod`
   entry point for CI.
 - **IL2CPP is not installed** for 6000.6.3f1; only Mono player variants are. The build uses IL2CPP
@@ -902,9 +902,61 @@ How it works:
 - **Left out by decision:** a fluent code-side builder. LitMotion *is* the code-side API, and a
   second builder over `TweenAnimation` would duplicate it.
 
+### M6.3 — A shareable Unity package
+The package installs from a Git URL:
+`https://github.com/MFahril/LitMotion-edit-in-inspector.git?path=Assets/LitMotionTweenEditor`. The
+root README and this package's README say how. It is `com.mfahril.litmotion-tween-editor`
+0.6.0, with a `package.json` and a `CHANGELOG.md`.
+
+Decisions worth not re-litigating:
+- **The package stays in `Assets/`** and is installed with `?path=`, the way LitMotion itself is.
+  Moving it to `Packages/` as an embedded package would have meant moving it outside the asset
+  database while the editor held references to it, for no gain to anyone installing it.
+- **The folder was renamed** from `LitMotion Tween Editor` to `LitMotionTweenEditor`, because a
+  Git URL `path` with spaces is fragile. The move went through `AssetDatabase.MoveAsset`, so every
+  GUID, and with them the demo scene's references, survived.
+- **The samples moved out of the package**, to `Assets/LitMotionTweenEditorSamples`. Inside it,
+  every project installing the package would get the sample Light channels in its add menu, and
+  a smoke-test menu item pointing at a scene it does not have. They depend on this project's demo
+  rig, so they are development content, not package content. The extension example is linked
+  from the package README.
+- **LitMotion is a declared dependency at 2.0.2**, but users install it from its Git URL first.
+  Unity cannot fetch a Git dependency named in a `package.json`, and a dependency listed in the
+  project's own manifest wins over the version a package asks for.
+- **Preset regeneration writes into the project when the package is read-only.**
+  `TweenPresetGenerator.ResolveFolder` uses the package's own `Presets` folder when it can be
+  written: in `Assets`, embedded, or referenced from disk. It finds that folder from the runtime
+  assembly definition, not a folder name. Installed from Git, the package already ships the
+  presets, and regenerating writes a copy to `Assets/LitMotion Tween Presets`.
+- **`"unity": "6000.6"`** is the version actually tested. Older Unity 6 releases may well work, but
+  nothing has run there.
+
+**Verified as someone installing it would.** The package was packed into a tarball and added to a
+brand-new, empty Unity 6000.6.3f1 project, next to LitMotion fetched from its Git URL. A tarball
+is installed read-only from the package cache, as a Git URL package is. The package's tests then
+ran there in batch mode, through `testables`:
+
+| Result | |
+|---|---|
+| Package resolution and compile | ✅ No errors |
+| EditMode | ✅ 393 passed, 0 failed, 20 skipped |
+| PlayMode | ✅ 18 / 18 |
+
+- **The skips are expected:**
+  - 17 TMP tests, because a fresh project has no TMP Essential Resources;
+  - 2 tests that need the sample channels, which are not in the package;
+  - the `[Explicit]` benchmark.
+- **The first run of this found a test bug.** The TMP tests' guard read
+  `TMP_Settings.defaultFontAsset`, which throws when the TMP settings asset does not exist at
+  all, so they failed instead of skipping. They now check `TMP_Settings.instance` first.
+- **The preset folder test took its read-only branch**, which confirms regeneration would write
+  into the project.
+
 ### Open
-- **M6.3:** packaging (`package.json`, `Samples~`, a CHANGELOG, a LICENSE, moving out of `Assets/`)
-  waits until it is decided whether the package is meant to be shared.
+- **A license.** The repository has none, which legally means nobody else may use the code. Add
+  a `LICENSE` file before sharing. A license is the owner's choice, so none was picked here.
+- **A release tag.** The README's pinning example uses `#v0.6.0`, which works once that tag is
+  pushed.
 - **IL2CPP:** add the *Windows Build Support (IL2CPP)* module in Unity Hub, and the smoke build
   will use it with no code change.
 
@@ -951,10 +1003,10 @@ not a detached element. And a backgrounded editor does not refresh the Inspector
 selection change is not visible there until the editor is focused.
 
 **The demo rig.** `Assets/Scenes/TestScene.unity` holds **LMTE Test Rig**: 17 `TweenPlayer`s
-covering every implemented channel, with a canvas for the UI-only ones and `Samples/
+covering every implemented channel, with a canvas for the UI-only ones and `Assets/LitMotionTweenEditorSamples/
 TweenDemoReceiver.cs` as the target for the Callback and Custom steps. Cubes 01–09 and 12–17
 are 3D; 10, 11, 15 and 16 live on the canvas. `12 Material` has its own
-`Samples/DemoMaterial.mat` on purpose, so a preview never writes to a material shared with
+`Assets/LitMotionTweenEditorSamples/DemoMaterial.mat` on purpose, so a preview never writes to a material shared with
 anything else.
 
 **A test that builds motions must track every handle it creates.** Building without a

@@ -19,7 +19,8 @@ namespace LitMotion.TweenEditor.Editor
     /// </remarks>
     internal static class TweenPresetGenerator
     {
-        const string DefaultFolder = "Assets/LitMotion Tween Editor/Presets";
+        /// <summary>Where presets go when the package's own folder cannot be written to.</summary>
+        const string ProjectFolder = "Assets/LitMotion Tween Presets";
 
         /// <summary>Distance a slide-in travels, in local units or UI pixels.</summary>
         const float SlideDistance = 160f;
@@ -27,7 +28,7 @@ namespace LitMotion.TweenEditor.Editor
         [MenuItem("Tools/LitMotion/Generate Tween Presets")]
         public static void GenerateAll()
         {
-            var folder = EnsureFolder(DefaultFolder);
+            var folder = EnsureFolder(ResolveFolder());
             var presets = Build();
             var written = 0;
 
@@ -59,6 +60,46 @@ namespace LitMotion.TweenEditor.Editor
 
             var first = AssetDatabase.LoadAssetAtPath<TweenAnimationAsset>(folder + "/FadeIn.asset");
             if (first != null) EditorGUIUtility.PingObject(first);
+        }
+
+        /// <summary>
+        /// The folder presets are written to: the package's own <c>Presets</c> folder when it can
+        /// be written, otherwise one in the project.
+        /// </summary>
+        /// <remarks>
+        /// Installed from a Git URL or a registry, the package lives read-only in the package
+        /// cache, where it already ships the generated presets; regenerating then writes a copy
+        /// into the project instead. Copied into <c>Assets</c>, or embedded or referenced from
+        /// disk, the package can be written to, and the presets are overwritten in place so
+        /// references to them keep working.
+        /// </remarks>
+        internal static string ResolveFolder()
+        {
+            var assembly = typeof(TweenPresetGenerator).Assembly;
+            var package = UnityEditor.PackageManager.PackageInfo.FindForAssembly(assembly);
+
+            if (package == null)
+            {
+                // Not a package: the files sit somewhere under Assets. Find this package's root
+                // from its runtime assembly definition rather than assuming a folder name.
+                var guids = AssetDatabase.FindAssets("LitMotionTweenEditor t:AssemblyDefinitionAsset");
+                foreach (var guid in guids)
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(guid);
+                    if (Path.GetFileName(path) != "LitMotionTweenEditor.asmdef") continue;
+
+                    // <root>/Runtime/LitMotionTweenEditor.asmdef
+                    var root = Path.GetDirectoryName(Path.GetDirectoryName(path))?.Replace('\\', '/');
+                    if (!string.IsNullOrEmpty(root)) return root + "/Presets";
+                }
+
+                return ProjectFolder;
+            }
+
+            var writable = package.source is UnityEditor.PackageManager.PackageSource.Embedded
+                or UnityEditor.PackageManager.PackageSource.Local;
+
+            return writable ? package.assetPath + "/Presets" : ProjectFolder;
         }
 
         /// <summary>The preset library, keyed by asset file name.</summary>
