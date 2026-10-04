@@ -50,7 +50,7 @@ Unity then stays on that commit, recorded in `Packages/packages-lock.json`, unti
 pin a release, add its Git tag to the end of the URL:
 
 ```
-https://github.com/MFahril/LitMotion-edit-in-inspector.git?path=Assets/LitMotionTweenEditor#v0.6.0
+https://github.com/MFahril/LitMotion-edit-in-inspector.git?path=Assets/LitMotionTweenEditor#v0.1.1
 ```
 
 ### Updating

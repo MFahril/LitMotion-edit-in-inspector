@@ -1,7 +1,7 @@
 {
   "name": "com.mfahril.litmotion-tween-editor",
   "displayName": "LitMotion Tween Editor",
-  "version": "0.6.0",
+  "version": "0.1.1",
   "unity": "6000.6",
   "description": "Author, chain, preview and scrub LitMotion tween animations from the Unity editor: a timeline in the inspector, exact edit-mode preview, 24 tween types, presets, and your own channels through extensions. Requires LitMotion 2.0.2.",
   "keywords": [

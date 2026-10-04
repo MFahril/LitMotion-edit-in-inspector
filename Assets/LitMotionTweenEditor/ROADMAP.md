@@ -906,7 +906,7 @@ How it works:
 The package installs from a Git URL:
 `https://github.com/MFahril/LitMotion-edit-in-inspector.git?path=Assets/LitMotionTweenEditor`. The
 root README and this package's README say how. It is `com.mfahril.litmotion-tween-editor`
-0.6.0, with a `package.json` and a `CHANGELOG.md`.
+0.1.1, with a `package.json` and a `CHANGELOG.md`.
 
 Decisions worth not re-litigating:
 - **The package stays in `Assets/`** and is installed with `?path=`, the way LitMotion itself is.
@@ -955,7 +955,7 @@ ran there in batch mode, through `testables`:
 ### Open
 - **A license.** The repository has none, which legally means nobody else may use the code. Add
   a `LICENSE` file before sharing. A license is the owner's choice, so none was picked here.
-- **A release tag.** The README's pinning example uses `#v0.6.0`, which works once that tag is
+- **A release tag.** The README's pinning example uses `#v0.1.1`, which works once that tag is
   pushed.
 - **IL2CPP:** add the *Windows Build Support (IL2CPP)* module in Unity Hub, and the smoke build
   will use it with no code change.

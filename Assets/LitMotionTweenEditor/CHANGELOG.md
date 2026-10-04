@@ -1,10 +1,11 @@
 # Changelog
 
 All notable changes to this package. The format follows
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the version numbers follow the
-milestones in [ROADMAP.md](ROADMAP.md).
+[Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
+[Semantic Versioning](https://semver.org/). The development milestones (M1–M6) are tracked
+separately, in [ROADMAP.md](ROADMAP.md).
 
-## [0.6.0] - 2026-10-04
+## [0.1.1] - 2026-10-04
 
 First release as a Unity package, installable from a Git URL.
 
