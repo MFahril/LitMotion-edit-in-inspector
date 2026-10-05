@@ -3,7 +3,30 @@
 All notable changes to this package. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/). The development milestones (M1–M6) are tracked
-separately, in [ROADMAP.md](ROADMAP.md).
+separately, in [ROADMAP.md](https://github.com/MFahril/LitMotion-edit-in-inspector/blob/main/docs/ROADMAP.md).
+
+## [0.1.2] - 2026-10-05
+
+### Added
+- A **Showcase** sample: one UI card whose *Show* animation has nine clips across six tween
+  families. Import it from the package's **Samples** tab in the Package Manager.
+
+### Changed
+- `ROADMAP.md` and `UX.md` are no longer part of the package. They are development notes, and
+  now live in the repository's `docs` folder.
+
+### Fixed
+- Starting or stopping a preview could log "Trying to access the DPI setting of a visual element
+  that is not on a panel" and `get_pixelsPerPoint can only be called from the main thread` on
+  Unity 6. The animation chips, ruler labels and binding-status rows were recreated on every
+  refresh, sometimes several times in a frame, tearing down labels Unity had just queued for text
+  layout. They are now updated in place.
+- In an animation with several steps, a later step that reads the object's current value used
+  to read an earlier step's start value instead. This covers From Current, Relative, Offset, and
+  a punch or shake's base. A pop-in from 0.8 followed by a punch on scale left the object at 0.8.
+  LitMotion writes a motion's start value the moment it is created, and that happened while the
+  later steps were still being built. Steps are now built without writing, and the opening frame
+  is written once the whole animation is built.
 
 ## [0.1.1] - 2026-10-04
 
@@ -49,17 +72,6 @@ First release as a Unity package, installable from a Git URL.
   installed read-only.
 
 ### Fixed
-- Starting or stopping a preview could log "Trying to access the DPI setting of a visual element
-  that is not on a panel" and `get_pixelsPerPoint can only be called from the main thread` on
-  Unity 6. The animation chips, ruler labels and binding-status rows were recreated on every
-  refresh, sometimes several times in a frame, tearing down labels Unity had just queued for text
-  layout. They are now updated in place.
-- In an animation with several steps, a later step that reads the object's current value used
-  to read an earlier step's start value instead. This covers From Current, Relative, Offset, and
-  a punch or shake's base. A pop-in from 0.8 followed by a punch on scale left the object at 0.8.
-  LitMotion writes a motion's start value the moment it is created, and that happened while the
-  later steps were still being built. Steps are now built without writing, and the opening frame
-  is written once the whole animation is built.
 - An animation of zero length, such as one made only of Callback steps, now fires its steps at
   runtime. Before, it fired them only in the editor preview.
 - TextReveal no longer rebuilds the TMP mesh on every frame.

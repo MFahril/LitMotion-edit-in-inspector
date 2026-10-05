@@ -1,7 +1,7 @@
 {
   "name": "com.mfahril.litmotion-tween-editor",
   "displayName": "LitMotion Tween Editor",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "unity": "6000.6",
   "description": "Author, chain, preview and scrub LitMotion tween animations from the Unity editor: a timeline in the inspector, exact edit-mode preview, 24 tween types, presets, and your own channels through extensions. Requires LitMotion 2.0.2.",
   "keywords": [
@@ -20,5 +20,12 @@
   "changelogUrl": "https://github.com/MFahril/LitMotion-edit-in-inspector/blob/main/Assets/LitMotionTweenEditor/CHANGELOG.md",
   "dependencies": {
     "com.annulusgames.lit-motion": "2.0.2"
-  }
+  },
+  "samples": [
+    {
+      "displayName": "Showcase",
+      "description": "One UI card whose Show animation has nine clips across six tween families. Open the scene and press Play, or select Showcase Card to scrub it in the inspector. Needs TextMesh Pro's essential resources.",
+      "path": "Samples~/Showcase"
+    }
+  ]
 }

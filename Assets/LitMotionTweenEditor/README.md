@@ -4,11 +4,11 @@ Author, chain, preview and scrub [LitMotion](https://github.com/annulusgames/Lit
 animations from the Unity editor — on a timeline, with exact edit-mode preview, and without
 writing code.
 
-- **Version 0.1.1** · **Unity** 6000.6+ · **LitMotion** 2.0.2 · optional uGUI, TextMeshPro and URP support
+- **Version 0.1.2** · **Unity** 6000.6+ · **LitMotion** 2.0.2 · optional uGUI, TextMeshPro and URP support
 - 24 tween types, 31 eases plus custom curves, presets, and your own channels via extensions
 
-For what the tool does and why, see [UX.md](UX.md). For how it is built and the decisions
-behind it, see [ROADMAP.md](ROADMAP.md). Changes by version are in [CHANGELOG.md](CHANGELOG.md).
+For what the tool does and why, see [UX.md](https://github.com/MFahril/LitMotion-edit-in-inspector/blob/main/docs/UX.md). For how it is built and the decisions
+behind it, see [ROADMAP.md](https://github.com/MFahril/LitMotion-edit-in-inspector/blob/main/docs/ROADMAP.md). Changes by version are in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
@@ -47,9 +47,13 @@ Or add both lines to `Packages/manifest.json` by hand:
 uGUI, TextMeshPro and URP support switch on by themselves when those packages are present.
 Nothing has to be configured.
 
+**Sample:** to see a finished animation, import **Showcase** from the package's **Samples** tab
+in the Package Manager, open its scene and press Play. It uses TextMesh Pro, so import the TMP
+Essentials if Unity asks.
+
 **Updating:** an installed copy stays on the commit it was installed from until you choose to
 update. Select the package in the Package Manager and click **Update**, or pin a release by
-adding its tag to the URL, such as `#v0.1.1`.
+adding its tag to the URL, such as `#v0.1.2`.
 
 ---
 
@@ -233,4 +237,4 @@ one string each time the *shown* number changes. A TMP counter allocates nothing
   therefore holds the alpha until the end, and other scripts cannot change that property until
   then.
 
-Numbers, method and the benchmark test are in [ROADMAP.md](ROADMAP.md) under M5.
+Numbers, method and the benchmark test are in [ROADMAP.md](https://github.com/MFahril/LitMotion-edit-in-inspector/blob/main/docs/ROADMAP.md) under M5.

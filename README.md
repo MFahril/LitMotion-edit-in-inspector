@@ -6,7 +6,7 @@ Author, chain, preview and scrub [LitMotion](https://github.com/annulusgames/Lit
 animations from the Unity editor. You get a timeline in the inspector, exact edit-mode preview,
 24 tween types, presets, and your own channels through extensions, all without writing code.
 
-- **Current version: 0.1.1.** What changed in each version is in the
+- **Current version: 0.1.2.** What changed in each version is in the
   [CHANGELOG](Assets/LitMotionTweenEditor/CHANGELOG.md).
 - **Unity** 6000.6 or newer · **LitMotion** 2.0.2
 - uGUI, TextMeshPro and URP support switch on by themselves when those packages are present
@@ -54,7 +54,7 @@ Unity then stays on that commit, recorded in `Packages/packages-lock.json`, unti
 pin a release, add its Git tag to the end of the URL:
 
 ```
-https://github.com/MFahril/LitMotion-edit-in-inspector.git?path=Assets/LitMotionTweenEditor#v0.1.1
+https://github.com/MFahril/LitMotion-edit-in-inspector.git?path=Assets/LitMotionTweenEditor#v0.1.2
 ```
 
 ### Updating
@@ -96,6 +96,13 @@ Then play it from code:
 GetComponent<TweenPlayer>().Play(TweenAnimationId.Show);
 ```
 
+### Showcase sample
+
+To see a finished animation first, select **LitMotion Tween Editor** in the Package Manager, open
+its **Samples** tab and import **Showcase**. Open the imported `Showcase` scene and press Play, or
+select **Showcase Card** to scrub its *Show* animation in the inspector. The card uses TextMesh
+Pro; if Unity asks, import the TMP Essentials.
+
 The full guide is in the package's [README](Assets/LitMotionTweenEditor/README.md): the
 quickstart, playing from code, keys, extension channels and runtime cost. Changes are in the
 [CHANGELOG](Assets/LitMotionTweenEditor/CHANGELOG.md).
@@ -108,12 +115,14 @@ installs. The rest is only for developing it:
 
 | Path | What |
 |---|---|
-| `Assets/LitMotionTweenEditor` | The package: runtime, editor, presets, tests, docs |
+| `Assets/LitMotionTweenEditor` | The package: runtime, editor, presets, tests, README and CHANGELOG |
+| `Assets/LitMotionTweenEditor/Samples~/Showcase` | The shipped copy of the Showcase scene. Unity skips folders ending in `~`, so this copy is not part of this project |
 | `Assets/LitMotionTweenEditorSamples` | A sample extension channel, the demo rig's helpers, and the player smoke test (**Tools → LitMotion → Smoke Test**) |
-| `Assets/Scenes/Showcase.unity` | One UI card whose *Show* animation has nine clips across six families, plays on Play. Used for the screenshots |
+| `Assets/Scenes/Showcase.unity` | One UI card whose *Show* animation has nine clips across six families, plays on Play. Used for the screenshots. Edit this copy, not the one in `Samples~` |
+| `docs` | [ROADMAP.md](docs/ROADMAP.md), [UX.md](docs/UX.md) and the README's images. Not shipped |
 | `Assets/Scenes/TestScene.unity` | **LMTE Test Rig**: hand-authored animations covering every tween type. **LMTE Defaults Rig**: 28 samples, each holding one freshly added clip, showing what a new clip of each type does on a 3D object and on UI |
 
-How the package is built, and why, is in [ROADMAP.md](Assets/LitMotionTweenEditor/ROADMAP.md).
+How the package is built, and why, is in [ROADMAP.md](docs/ROADMAP.md).
 
 ### Releasing a new version
 
@@ -129,8 +138,13 @@ version number they can see and a tag they can pin:
    - the middle one for new features, `0.1.1` → `0.2.0`.
 3. **Add a section** for that version at the top of
    [`CHANGELOG.md`](Assets/LitMotionTweenEditor/CHANGELOG.md).
-4. **Commit and push** to `main`.
-5. **Tag the release and push the tag**, so `#v0.1.2` works in a URL:
+4. **If the Showcase scene changed, copy it into the sample:**
+
+   ```
+   cp Assets/Scenes/Showcase.unity Assets/Scenes/Showcase.unity.meta Assets/LitMotionTweenEditor/Samples~/Showcase/
+   ```
+5. **Commit and push** to `main`.
+6. **Tag the release and push the tag**, so `#v0.1.2` works in a URL:
 
    ```
    git tag v0.1.2
