@@ -1,5 +1,7 @@
 # LitMotion Tween Editor
 
+![The Tween Player inspector: a timeline of clips on the left and the selected clip's settings on the right](docs/images/tween-editor.png)
+
 Author, chain, preview and scrub [LitMotion](https://github.com/annulusgames/LitMotion) tween
 animations from the Unity editor. You get a timeline in the inspector, exact edit-mode preview,
 24 tween types, presets, and your own channels through extensions, all without writing code.
@@ -108,6 +110,7 @@ installs. The rest is only for developing it:
 |---|---|
 | `Assets/LitMotionTweenEditor` | The package: runtime, editor, presets, tests, docs |
 | `Assets/LitMotionTweenEditorSamples` | A sample extension channel, the demo rig's helpers, and the player smoke test (**Tools → LitMotion → Smoke Test**) |
+| `Assets/Scenes/Showcase.unity` | One UI card whose *Show* animation has nine clips across six families, plays on Play. Used for the screenshots |
 | `Assets/Scenes/TestScene.unity` | **LMTE Test Rig**: hand-authored animations covering every tween type. **LMTE Defaults Rig**: 28 samples, each holding one freshly added clip, showing what a new clip of each type does on a 3D object and on UI |
 
 How the package is built, and why, is in [ROADMAP.md](Assets/LitMotionTweenEditor/ROADMAP.md).

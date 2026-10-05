@@ -399,6 +399,40 @@ namespace LitMotion.TweenEditor.Tests
         }
 
         [Test]
+        public void ALaterStepReadsTheObjectNotAnEarlierStepsStartValue()
+        {
+            // LitMotion writes a motion's start value as it is created. Inside a sequence that
+            // used to happen while the later steps were still being built, so a punch after a
+            // pop-in read the pop-in's 0.8 as "the current scale", shook around it, and left the
+            // object at 0.8 for good.
+            fast.transform.localScale = Vector3.one;
+
+            var pop = Step(TweenType.Scale);
+            pop.UniformScale = true;
+            pop.FromCurrent = false;
+            pop.From = new Vector4(0.8f, 0.8f, 0.8f, 0f);
+            pop.To = Vector4.one;
+            pop.Duration = 0.5f;
+
+            var punch = Step(TweenType.Punch);
+            punch.Channel = TweenChannel.Scale;
+            punch.FromCurrent = true;
+            punch.To = new Vector4(0.1f, 0.1f, 0.1f, 0f);
+            punch.StartTime = 0.6f;
+            punch.Duration = 0.4f;
+
+            fastDriver = TweenAnimationRunner.Build(Animation(pop, punch), fast, fastClock.Scheduler);
+            Assert.IsTrue(fastDriver.IsActive());
+            fastDriver.Preserve();
+
+            fastDriver.Time = 0.25f;
+            Assert.Less(fast.transform.localScale.x, 1f, "the pop-in should be under way");
+
+            fastDriver.Time = fastDriver.TotalDuration;
+            Assert.AreEqual(1f, fast.transform.localScale.x, Tolerance, "the punch must settle on the object's own scale");
+        }
+
+        [Test]
         public void AnAnimationOfOnlyCallbacksStillFiresThemAtRuntime()
         {
             // A zero-length sequence completes without driving its children, so a marker-only

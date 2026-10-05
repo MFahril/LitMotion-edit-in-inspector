@@ -94,6 +94,15 @@ namespace LitMotion.TweenEditor
 
             if (!driver.IsActive()) return MotionHandle.None;
 
+            // Steps are built without writing their start value (see TweenStepBuilder.Configure),
+            // so the opening frame is written here, once everything is built. Without it the
+            // object would keep its old value until LitMotion's next update -- a visible frame
+            // when an animation is started after that update, as from a button click, and a
+            // fade-in panel would flash fully opaque first. On a sequence this runs every step
+            // that starts at zero and leaves the later ones alone. A zero-length step would
+            // complete right here instead, so it is left to its first update.
+            if (driver.TotalDuration > 0d) driver.Time = 0d;
+
             var speed = animation.PlaybackSpeed;
             if (speed > 0f && !Mathf.Approximately(speed, 1f)) driver.PlaybackSpeed = speed;
 

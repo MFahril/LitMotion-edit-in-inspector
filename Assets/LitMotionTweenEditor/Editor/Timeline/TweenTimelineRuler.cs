@@ -124,13 +124,17 @@ namespace LitMotion.TweenEditor.Editor
         }
 
         /// <summary>
-        /// Rebuilds the tick labels. Kept as real Labels rather than painted text because
-        /// Painter2D cannot draw text.
+        /// Brings the tick labels up to date. Kept as real Labels rather than painted text
+        /// because Painter2D cannot draw text.
         /// </summary>
+        /// <remarks>
+        /// Existing labels are reused and only their text and position updated. This runs on
+        /// most edits, often several times a frame, and recreating every label each time tore
+        /// down labels whose text Unity 6 had just queued for layout -- which its text system
+        /// reports as text "not on a panel".
+        /// </remarks>
         public void RefreshLabels()
         {
-            Clear();
-
             var timeline = contextProvider?.Invoke() ?? TweenTimelineContext.Default;
             var pixelsPerSecond = Mathf.Max(1f, timeline.PixelsPerSecond);
             var interval = ChooseTickInterval(pixelsPerSecond);
@@ -139,27 +143,43 @@ namespace LitMotion.TweenEditor.Editor
             if (float.IsNaN(width) || width <= 1f) width = 600f;
 
             var count = Mathf.CeilToInt(width / (interval * pixelsPerSecond)) + 1;
+            var used = 0;
+
             for (var i = 0; i < count; i++)
             {
                 var seconds = i * interval;
                 var x = seconds * pixelsPerSecond;
                 if (x > width) break;
 
-                Add(new Label(FormatTime(seconds))
-                {
-                    pickingMode = PickingMode.Ignore,
-                    style =
-                    {
-                        position = Position.Absolute,
-                        left = x + 3f,
-                        top = 1f,
-                        fontSize = 9f,
-                        color = TweenTimelineStyles.RulerText,
-                    },
-                });
+                var label = used < childCount ? (Label)this[used] : AddTickLabel();
+                var text = FormatTime(seconds);
+                if (label.text != text) label.text = text;
+                label.style.left = x + 3f;
+                used++;
             }
 
+            // Only the surplus goes, from the end, when zooming in leaves fewer ticks.
+            while (childCount > used) RemoveAt(childCount - 1);
+
             MarkDirtyRepaint();
+        }
+
+        Label AddTickLabel()
+        {
+            var label = new Label
+            {
+                pickingMode = PickingMode.Ignore,
+                style =
+                {
+                    position = Position.Absolute,
+                    top = 1f,
+                    fontSize = 9f,
+                    color = TweenTimelineStyles.RulerText,
+                },
+            };
+
+            Add(label);
+            return label;
         }
 
         static string FormatTime(float seconds)

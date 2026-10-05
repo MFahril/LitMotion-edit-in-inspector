@@ -21,6 +21,8 @@ namespace LitMotion.TweenEditor.Editor
         readonly VisualElement chips;
         readonly VisualElement emptyState;
         readonly List<VisualElement> chipElements = new();
+        readonly List<Label> chipLabels = new();
+        readonly List<string> chipIds = new();
 
         int count;
 
@@ -70,14 +72,33 @@ namespace LitMotion.TweenEditor.Editor
             RegisterCallback<DragPerformEvent>(OnDragPerform);
         }
 
-        /// <summary>Redraws every chip.</summary>
+        /// <summary>Brings the chips up to date.</summary>
         /// <param name="ids">Each animation's id, in list order.</param>
         /// <param name="selected">Index of the current animation.</param>
         /// <param name="playing">Index of the animation being previewed, or -1.</param>
+        /// <remarks>
+        /// When the set of animations is unchanged, the existing chips are restyled rather than
+        /// rebuilt. This runs on every preview start and stop, and once from each view showing
+        /// the player, so the old rebuild could create chips and tear them down again within one
+        /// frame. Unity 6's text system queues a label for layout as soon as its text is set,
+        /// and it then reported the torn-down labels as text "not on a panel".
+        /// </remarks>
         public void Refresh(IReadOnlyList<string> ids, int selected, int playing)
         {
+            if (SameIds(ids))
+            {
+                for (var i = 0; i < chipElements.Count; i++)
+                {
+                    ApplyState(chipElements[i], chipLabels[i], i == selected, i == playing);
+                }
+
+                return;
+            }
+
             chips.Clear();
             chipElements.Clear();
+            chipLabels.Clear();
+            chipIds.Clear();
             count = ids?.Count ?? 0;
 
             emptyState.style.display = count == 0 ? DisplayStyle.Flex : DisplayStyle.None;
@@ -85,8 +106,11 @@ namespace LitMotion.TweenEditor.Editor
 
             for (var i = 0; i < count; i++)
             {
-                var chip = BuildChip(ids[i], i, i == selected, i == playing);
+                var chip = BuildChip(ids[i], i, out var label);
+                ApplyState(chip, label, i == selected, i == playing);
                 chipElements.Add(chip);
+                chipLabels.Add(label);
+                chipIds.Add(ids[i]);
                 chips.Add(chip);
             }
 
@@ -101,7 +125,29 @@ namespace LitMotion.TweenEditor.Editor
             }
         }
 
-        VisualElement BuildChip(string id, int index, bool selected, bool playing)
+        /// <summary>True when the chips already show exactly these animations, in this order.</summary>
+        bool SameIds(IReadOnlyList<string> ids)
+        {
+            var incoming = ids?.Count ?? 0;
+            if (incoming != chipIds.Count || chipElements.Count != incoming) return false;
+
+            for (var i = 0; i < incoming; i++)
+            {
+                if (!string.Equals(ids[i], chipIds[i], StringComparison.Ordinal)) return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>Styles a chip for whether it is selected and whether it is being previewed.</summary>
+        static void ApplyState(VisualElement chip, Label label, bool selected, bool playing)
+        {
+            chip.style.backgroundColor = selected ? TweenTimelineStyles.ChipSelected : TweenTimelineStyles.ChipIdle;
+            TweenTimelineStyles.SetBorder(chip, 1f, playing ? TweenTimelineStyles.Playhead : TweenTimelineStyles.Border);
+            label.style.unityFontStyleAndWeight = selected ? FontStyle.Bold : FontStyle.Normal;
+        }
+
+        VisualElement BuildChip(string id, int index, out Label label)
         {
             var chip = new VisualElement
             {
@@ -115,24 +161,21 @@ namespace LitMotion.TweenEditor.Editor
                     marginBottom = 2f,
                     paddingLeft = 6f,
                     paddingRight = 1f,
-                    backgroundColor = selected ? TweenTimelineStyles.ChipSelected : TweenTimelineStyles.ChipIdle,
                 },
             };
             TweenTimelineStyles.SetRadius(chip, 10f);
-            TweenTimelineStyles.SetBorder(chip, 1f,
-                playing ? TweenTimelineStyles.Playhead : TweenTimelineStyles.Border);
 
-            var label = new Label(string.IsNullOrEmpty(id) ? "(no id)" : id)
+            var chipLabel = new Label(string.IsNullOrEmpty(id) ? "(no id)" : id)
             {
                 pickingMode = PickingMode.Ignore,
                 style =
                 {
                     fontSize = 11f,
-                    unityFontStyleAndWeight = selected ? FontStyle.Bold : FontStyle.Normal,
                     marginRight = 2f,
                 },
             };
-            chip.Add(label);
+            chip.Add(chipLabel);
+            label = chipLabel;
 
             var play = TweenUi.IconButton("PlayButton", "▶", "Preview this animation", () => PlayRequested?.Invoke(index));
             play.style.height = 16f;
@@ -147,7 +190,7 @@ namespace LitMotion.TweenEditor.Editor
 
                 if (evt.clickCount >= 2)
                 {
-                    BeginRename(chip, label, id, index);
+                    BeginRename(chip, chipLabel, id, index);
                 }
                 else
                 {
@@ -160,7 +203,7 @@ namespace LitMotion.TweenEditor.Editor
             chip.AddManipulator(new ContextualMenuManipulator(evt =>
             {
                 evt.menu.AppendAction("Play", _ => PlayRequested?.Invoke(index));
-                evt.menu.AppendAction("Rename", _ => BeginRename(chip, label, id, index));
+                evt.menu.AppendAction("Rename", _ => BeginRename(chip, chipLabel, id, index));
                 evt.menu.AppendAction("Duplicate", _ => DuplicateRequested?.Invoke(index));
                 evt.menu.AppendSeparator();
                 evt.menu.AppendAction("Move Left", _ => MoveRequested?.Invoke(index, -1),

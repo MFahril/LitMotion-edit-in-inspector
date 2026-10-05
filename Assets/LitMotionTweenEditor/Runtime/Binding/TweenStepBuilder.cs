@@ -674,6 +674,14 @@ namespace LitMotion.TweenEditor
             var loops = EffectiveLoops(step);
             if (loops != 1) builder = builder.WithLoops(loops, step.LoopType);
 
+            // LitMotion writes a motion's start value the moment it is created. In a multi-step
+            // animation that happened while later steps were still being built, so a later step
+            // reading the live value -- FromCurrent, Relative, FromOffset, a punch's base -- read
+            // an earlier step's start value instead of the object's: a pop-in from 0.8 followed
+            // by a punch on scale punched around 0.8 and finished there. Nothing is written while
+            // building; the runner writes the opening frame once the whole animation is built.
+            builder = builder.WithImmediateBind(false);
+
             if (alone)
             {
                 // Standing in for the animation's sequence. The runner only takes this path when

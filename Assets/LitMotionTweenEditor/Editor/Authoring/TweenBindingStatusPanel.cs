@@ -34,9 +34,25 @@ namespace LitMotion.TweenEditor.Editor
             style.display = expanded && childCount > 0 ? DisplayStyle.Flex : DisplayStyle.None;
         }
 
+        /// <summary>The issues the rows were last built from, to skip rebuilding identical rows.</summary>
+        string shownSignature;
+
         /// <summary>Rebuilds the rows from a fresh report.</summary>
+        /// <remarks>
+        /// Called on many events, often several per frame. Rows identical to the ones on screen
+        /// are left alone: tearing down labels whose text Unity has just queued for layout is
+        /// what makes Unity 6's text system report text "not on a panel".
+        /// </remarks>
         public void Show(TweenBindingReport report)
         {
+            var signature = Signature(report);
+            if (signature == shownSignature)
+            {
+                style.display = expanded && childCount > 0 ? DisplayStyle.Flex : DisplayStyle.None;
+                return;
+            }
+
+            shownSignature = signature;
             Clear();
 
             if (report == null || report.Issues.Count == 0)
@@ -54,6 +70,29 @@ namespace LitMotion.TweenEditor.Editor
             }
 
             style.display = expanded ? DisplayStyle.Flex : DisplayStyle.None;
+        }
+
+        /// <summary>Everything a row shows, so equal signatures mean identical rows.</summary>
+        static string Signature(TweenBindingReport report)
+        {
+            if (report == null || report.Issues.Count == 0) return string.Empty;
+
+            var builder = new System.Text.StringBuilder();
+            for (var i = 0; i < report.Issues.Count; i++)
+            {
+                var issue = report.Issues[i];
+                builder.Append(issue.StepIndex).Append('|').Append(issue.BlocksBinding).Append('|')
+                    .Append(issue.Message);
+
+                if (issue.Fixes != null)
+                {
+                    for (var f = 0; f < issue.Fixes.Count; f++) builder.Append('|').Append(issue.Fixes[f].Label);
+                }
+
+                builder.Append('\n');
+            }
+
+            return builder.ToString();
         }
 
         VisualElement BuildRow(TweenStepIssue issue)
