@@ -1,7 +1,7 @@
 # LitMotion Tween Editor
 
 Author, chain, preview and scrub [LitMotion](https://github.com/annulusgames/LitMotion) tween
-animations from the Unity editor — on a timeline, with exact edit-mode preview, and without
+animations from the Unity editor on a timeline, with exact edit-mode preview, and without
 writing code.
 
 - **Version 0.1.2** · **Unity** 6000.6+ · **LitMotion** 2.0.2 · optional uGUI, TextMeshPro and URP support
@@ -23,7 +23,6 @@ Unity's Package Manager runs Git to fetch a Git URL package.
    ```
    https://github.com/annulusgames/LitMotion.git?path=src/LitMotion/Assets/LitMotion
    ```
-
 2. **Install LitMotion Tween Editor** the same way, with:
 
    ```
@@ -120,39 +119,39 @@ whole animation too, including `await player.Play(id)`.
 
 Active while the timeline has focus. **Keys** in the editor shows the same list.
 
-| Key | Does |
-|---|---|
-| `Space` | Play / pause the preview |
-| `←` `→` | Nudge the selection one grid step; `Shift` for ten |
-| `Ctrl+D` | Duplicate |
-| `Del` / `Backspace` | Delete |
-| `Ctrl+C` / `Ctrl+V` | Copy, and paste at the playhead |
-| `Ctrl+A` | Select every visible clip |
-| `S` | Split at the playhead |
-| `M` | Mute or unmute |
-| `F` | Zoom to fit |
-| `Home` / `End` | Scrub to the start or the end |
-| `Alt+↑` / `Alt+↓` | Move the lane up or down |
+| Key                     | Does                                                |
+| ----------------------- | --------------------------------------------------- |
+| `Space`               | Play / pause the preview                            |
+| `←` `→`           | Nudge the selection one grid step;`Shift` for ten |
+| `Ctrl+D`              | Duplicate                                           |
+| `Del` / `Backspace` | Delete                                              |
+| `Ctrl+C` / `Ctrl+V` | Copy, and paste at the playhead                     |
+| `Ctrl+A`              | Select every visible clip                           |
+| `S`                   | Split at the playhead                               |
+| `M`                   | Mute or unmute                                      |
+| `F`                   | Zoom to fit                                         |
+| `Home` / `End`      | Scrub to the start or the end                       |
+| `Alt+↑` / `Alt+↓` | Move the lane up or down                            |
 
-| Pointer | Does |
-|---|---|
-| Drag a clip | Move it; its edges trim |
-| Ctrl/Shift+click | Add to the selection |
-| Drag empty space | Rubber-band select |
-| Wheel / Shift+wheel | Zoom at the cursor / pan |
-| Click the ease curve | Open the ease gallery |
-| Double-click a chip | Rename the animation |
+| Pointer              | Does                     |
+| -------------------- | ------------------------ |
+| Drag a clip          | Move it; its edges trim  |
+| Ctrl/Shift+click     | Add to the selection     |
+| Drag empty space     | Rubber-band select       |
+| Wheel / Shift+wheel  | Zoom at the cursor / pan |
+| Click the ease curve | Open the ease gallery    |
+| Double-click a chip  | Rename the animation     |
 
 ---
 
 ## Where things are
 
-| Menu | What |
-|---|---|
-| Window → LitMotion → Tween Editor | Dockable editor; follows the selection until locked |
-| Window → LitMotion → Tween Presets | Searchable preset browser; drag onto the chips |
-| Preferences → LitMotion Tween Editor | Defaults for new steps, snapping, zoom, lane height, colours |
-| Tools → LitMotion → Generate Tween Presets | Writes the 14 built-in presets. The package already ships them; when it is installed read-only, regenerating writes a copy to `Assets/LitMotion Tween Presets` |
+| Menu                                         | What                                                                                                                                                            |
+| -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Window → LitMotion → Tween Editor          | Dockable editor; follows the selection until locked                                                                                                             |
+| Window → LitMotion → Tween Presets         | Searchable preset browser; drag onto the chips                                                                                                                  |
+| Preferences → LitMotion Tween Editor        | Defaults for new steps, snapping, zoom, lane height, colours                                                                                                    |
+| Tools → LitMotion → Generate Tween Presets | Writes the 14 built-in presets. The package already ships them; when it is installed read-only, regenerating writes a copy to`Assets/LitMotion Tween Presets` |
 
 ---
 
